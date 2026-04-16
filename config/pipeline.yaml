@@ -1,0 +1,61 @@
+pipeline:
+  max_duration_seconds: 300
+  output_root: outputs
+  log_level: INFO
+
+research:
+  provider: azure_openai    # same as script provider
+  model: gpt-4.1
+  max_output_tokens: 3000
+  max_sources: 10
+
+script:
+  provider: azure_openai    # openai | azure_openai
+  model: gpt-4.1              # Azure OpenAI deployment name
+  max_output_tokens: 2200
+  temperature: 0.4
+  schema_enforced: true
+  azure_openai:
+    api_version: "2025-04-01-preview"
+
+tts:
+  primary: azure_speech
+  fallback: openai_tts
+  azure:
+    voice: en-US-AvaMultilingualNeural
+    style: narration-professional
+    style_degree: "1.1"
+    speaking_rate: "-5%"
+    output_format: riff-24khz-16bit-mono-pcm
+  openai:
+    model: gpt-4o-mini-tts
+    voice: marin
+    instructions: "Speak in a clear tutorial tone, medium pace, warm and confident."
+    response_format: wav
+
+recording:
+  mode: playwright
+  resolution: "1920x1080"
+  fps: 30
+  window_title: ""  # empty = full desktop capture
+  playwright:
+    viewport_width: 1280
+    viewport_height: 720
+    video: "on"
+  obs:
+    websocket_url: "ws://127.0.0.1:4455"
+    collection: TutorialScenes
+    profile: 1080p30
+    scene: MainDemo
+
+post:
+  engine: ffmpeg
+  crf: 20
+  preset: medium
+  audio_bitrate: 192k
+  captions:
+    engine: faster_whisper
+    model: small
+    device: cpu
+    compute_type: int8
+    burn_in: false

@@ -1,0 +1,24 @@
+Create a data-science tutorial script for the following topic:
+
+Topic: {{ topic }}
+Audience: {{ audience }}
+Target duration: {{ target_seconds }} seconds
+
+Pre-researched source material (use this as the primary factual basis — do not
+invent claims beyond what is provided here):
+{{ source_material }}
+
+Requirements:
+1. Return a JSON object matching the schema exactly.
+2. Include a shot list for every section. Each shot list must contain at least one
+   "code_walkthrough" shot that shows code being written, highlighted, or executed.
+3. Visual descriptions must reference the actual tool visible on screen — for
+   example "Jupyter notebook with a new cell importing pandas", "VS Code editor
+   with the train.py file open", "terminal running `python evaluate.py`", or
+   "browser showing the Plotly chart output".
+4. Write all narration in a natural screen-share style — as if the presenter is
+   talking the viewer through what they are doing on screen in real time (e.g.,
+   "Let me switch over to the notebook and load our dataset…").
+5. Avoid generic or placeholder visuals like "slide with bullet points". Every
+   visual should depict something the viewer would actually see during a live
+   coding demo.
