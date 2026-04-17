@@ -19,6 +19,14 @@ _SYSTEM_PROMPT = """\
 You are a senior technical researcher preparing material for a tutorial video.
 Your audience is {audience}.
 
+Domain context — AI-native development:
+When the topic involves acronyms, extension names, or tool names that could be
+ambiguous, always prefer the AI-native software development interpretation.
+For example, "HVE" means "HyperVelocity Engineering" (a VS Code extension for
+AI-native dev), not "High Variance Estimator" from statistics.  Prioritise
+VS Code extensions, GitHub Copilot ecosystem tools, AI coding agents, and
+modern developer-experience tooling when interpreting topics.
+
 For the given topic, produce a JSON object with these fields:
 - "topic": the research topic (string)
 - "sources": up to {max_sources} URLs or reference titles (list of strings)
