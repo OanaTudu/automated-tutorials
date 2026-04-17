@@ -66,7 +66,7 @@ def record_demo(
     skip_normalize = False
 
     if mode == "placeholder":
-        raw_path = _record_placeholder(script, output_dir, config["recording"])
+        raw_path = _record_slides_fallback(script, output_dir, config)
         skip_normalize = True
     elif mode == "playwright":
         try:
@@ -75,30 +75,30 @@ def record_demo(
             )
         except Exception:
             logger.warning(
-                "Playwright recording failed — falling back to placeholder mode",
+                "Playwright recording failed — falling back to slide-based video",
                 exc_info=True,
             )
-            raw_path = _record_placeholder(script, output_dir, config["recording"])
+            raw_path = _record_slides_fallback(script, output_dir, config)
             skip_normalize = True
     elif mode == "obs":
         try:
             raw_path = _record_obs(script, output_dir, config["recording"])
         except Exception:
             logger.warning(
-                "OBS recording failed — falling back to placeholder mode",
+                "OBS recording failed — falling back to slide-based video",
                 exc_info=True,
             )
-            raw_path = _record_placeholder(script, output_dir, config["recording"])
+            raw_path = _record_slides_fallback(script, output_dir, config)
             skip_normalize = True
     else:
         try:
             raw_path = _record_ffmpeg(script, output_dir, config["recording"])
         except Exception:
             logger.warning(
-                "ffmpeg gdigrab recording failed — falling back to placeholder mode",
+                "ffmpeg gdigrab recording failed — falling back to slide-based video",
                 exc_info=True,
             )
-            raw_path = _record_placeholder(script, output_dir, config["recording"])
+            raw_path = _record_slides_fallback(script, output_dir, config)
             skip_normalize = True
 
     # Normalize to consistent output
@@ -159,6 +159,47 @@ def _record_placeholder(
         raw_path.write_bytes(_MINIMAL_MP4_BYTES)
 
     return raw_path
+
+
+def _record_slides_fallback(
+    script: TutorialScript,
+    output_dir: Path,
+    config: dict,
+) -> Path:
+    """Try to generate a slide-based video; fall back to black placeholder if that fails too."""
+    timing_manifest: TimingManifest | None = None
+    manifest_path = output_dir.parent / "02_voice" / "timing_manifest.json"
+    if manifest_path.exists():
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        timing_manifest = TimingManifest.model_validate(manifest_data)
+
+    if timing_manifest is None:
+        logger.warning("No timing manifest — cannot generate slides, using placeholder")
+        return _record_placeholder(script, output_dir, config.get("recording", {}))
+
+    # Try loading research data for code examples
+    research_data = None
+    research_path = output_dir.parent / "00_research" / "research.json"
+    if research_path.exists():
+        try:
+            research_data = json.loads(research_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    try:
+        from .slide_renderer import render_slide_video
+
+        video_path = render_slide_video(
+            script, timing_manifest, output_dir, research_data,
+        )
+        logger.info("Slide-based video generated at %s", video_path)
+        return video_path
+    except Exception:
+        logger.warning(
+            "Slide renderer failed — falling back to black placeholder",
+            exc_info=True,
+        )
+        return _record_placeholder(script, output_dir, config.get("recording", {}))
 
 
 # ---------------------------------------------------------------------------
