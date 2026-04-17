@@ -215,7 +215,6 @@ def _synthesize_openai(
 
         segments: list[TimingSegment] = []
         cumulative_ms = 0
-        slot_secs: list[float] = []
         for i, info in enumerate(segment_infos):
             dur_ms = durations_ms[i]
             segments.append(TimingSegment(
@@ -224,40 +223,56 @@ def _synthesize_openai(
                 end_ms=cumulative_ms + dur_ms,
                 text=info["text"],
             ))
-            # Compute slot: use target_sec if it exceeds the audio, otherwise audio + tail
-            target_ms = int(info["target_sec"] * 1000)
-            slot_ms = max(target_ms, dur_ms + 500) if i + 1 < len(segment_infos) else dur_ms
-            slot_sec = slot_ms / 1000
-            slot_secs.append(slot_sec)
-            cumulative_ms += slot_ms
+            cumulative_ms += dur_ms
 
         manifest = TimingManifest(total_duration_ms=cumulative_ms, segments=segments)
 
-        # Build ffmpeg filter_complex: pad each segment to fill its timeslot
-        inputs: list[str] = []
-        for seg_path in segment_paths:
-            inputs.extend(["-i", str(seg_path)])
-
-        filter_parts: list[str] = []
-        labels: list[str] = []
-        for i, slot_sec in enumerate(slot_secs):
-            if i + 1 < len(slot_secs):
-                filter_parts.append(f"[{i}:a]apad=whole_dur={slot_sec:.3f}[a{i}]")
-                labels.append(f"[a{i}]")
-            else:
-                labels.append(f"[{i}:a]")
-
-        n = len(labels)
-        filter_parts.append(f"{''.join(labels)}concat=n={n}:v=0:a=1[out]")
-        full_filter = ";".join(filter_parts)
-
+        # Build ffmpeg concat: join segments with short silence gaps (no padding)
+        GAP_SEC = 1.5
+        gap_path = output_dir / "_tts_gap.wav"
         subprocess.run(
-            ["ffmpeg", "-y", *inputs, "-filter_complex", full_filter,
-             "-map", "[out]", str(output_path)],
-            capture_output=True,
-            text=True,
-            check=True,
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono",
+             "-t", str(GAP_SEC), "-c:a", "pcm_s16le", str(gap_path)],
+            capture_output=True, check=True,
         )
+
+        concat_list = output_dir / "_tts_concat.txt"
+        lines: list[str] = []
+        tight_segments: list[TimingSegment] = []
+        tight_cursor_ms = 0
+        for i, (seg_path, info) in enumerate(zip(segment_paths, segment_infos)):
+            if i > 0:
+                lines.append(f"file '{gap_path.resolve()}'")
+                tight_cursor_ms += int(GAP_SEC * 1000)
+            lines.append(f"file '{seg_path.resolve()}'")
+            dur_ms = durations_ms[i]
+            tight_segments.append(TimingSegment(
+                id=info["id"],
+                start_ms=tight_cursor_ms,
+                end_ms=tight_cursor_ms + dur_ms,
+                text=info["text"],
+            ))
+            tight_cursor_ms += dur_ms
+
+        concat_list.write_text("\n".join(lines), encoding="utf-8")
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "concat", "-safe", "0",
+             "-i", str(concat_list.resolve()), "-c:a", "pcm_s16le",
+             str(output_path.resolve())],
+            capture_output=True, check=True,
+            cwd=str(output_dir.resolve()),
+        )
+
+        # Update manifest with tight timing (no padding)
+        manifest = TimingManifest(
+            total_duration_ms=tight_cursor_ms, segments=tight_segments,
+        )
+
+        # Cleanup temp files
+        for f in segment_paths:
+            f.unlink(missing_ok=True)
+        gap_path.unlink(missing_ok=True)
+        concat_list.unlink(missing_ok=True)
 
         logger.info("OpenAI TTS (per-segment + ffmpeg) wrote %s", output_path)
 
