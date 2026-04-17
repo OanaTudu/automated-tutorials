@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 from openai import OpenAI
@@ -123,6 +125,43 @@ def _research_azure(
     return _parse_research(raw_text, topic)
 
 
+def _cache_key(topic: str, audience: str, research_cfg: dict) -> str:
+    """Compute a deterministic SHA-256 cache key from normalised inputs."""
+    blob = json.dumps(
+        {
+            "topic": topic.strip().lower(),
+            "audience": audience.strip().lower(),
+            "model": research_cfg.get("model", ""),
+            "max_sources": research_cfg.get("max_sources", 5),
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def _load_cache(cache_dir: Path, key: str, ttl_days: int) -> ResearchResult | None:
+    """Load a cached research result if it exists and has not expired."""
+    cache_file = cache_dir / f"{key}.json"
+    if not cache_file.exists():
+        return None
+    data = json.loads(cache_file.read_text(encoding="utf-8"))
+    cached_at = datetime.fromisoformat(data.get("_cached_at", "2000-01-01"))
+    if (datetime.now() - cached_at).days > ttl_days:
+        logger.info("Cache expired for key %s", key[:12])
+        return None
+    return ResearchResult.model_validate(data)
+
+
+def _write_cache(cache_dir: Path, key: str, result: ResearchResult) -> None:
+    """Persist a research result to the cache directory with a timestamp."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    data = result.model_dump()
+    data["_cached_at"] = datetime.now().isoformat()
+    (cache_dir / f"{key}.json").write_text(
+        json.dumps(data, indent=2, default=str), encoding="utf-8"
+    )
+
+
 def research_topic(
     topic: str,
     output_dir: Path,
@@ -136,6 +175,31 @@ def research_topic(
     the Azure provider.  Results are saved as ``research.json``.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # ── Cache lookup ─────────────────────────────────────────────────────
+    cache_cfg = config.get("research", {}).get("cache", {})
+    cache_enabled = cache_cfg.get("enabled", False)
+    cache_dir: Path | None = None
+    cache_key_hex: str | None = None
+
+    if cache_enabled:
+        cache_dir = Path(cache_cfg.get("cache_dir", "outputs/.research_cache"))
+        _rcfg = _get_research_config(config)
+        cache_key_hex = _cache_key(topic, audience, _rcfg)
+
+        if not config.get("force_research", False):
+            cached = _load_cache(cache_dir, cache_key_hex, cache_cfg.get("ttl_days", 7))
+            if cached is not None:
+                logger.info("Research cache hit for '%s'", topic)
+                research_path = output_dir / "research.json"
+                research_path.write_text(cached.model_dump_json(indent=2), encoding="utf-8")
+                return StageResult(
+                    stage="research",
+                    success=True,
+                    output_path=str(research_path),
+                    metadata={"cache_hit": True},
+                )
+
     research_cfg = _get_research_config(config)
 
     system_prompt = _SYSTEM_PROMPT.format(
@@ -162,6 +226,10 @@ def research_topic(
     except Exception as exc:
         logger.error("Research stage failed: %s", exc)
         result = ResearchResult(topic=topic)
+
+    # ── Cache write ──────────────────────────────────────────────────────
+    if cache_enabled and cache_dir is not None and cache_key_hex is not None:
+        _write_cache(cache_dir, cache_key_hex, result)
 
     research_path = output_dir / "research.json"
     research_path.write_text(result.model_dump_json(indent=2), encoding="utf-8")

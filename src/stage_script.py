@@ -69,6 +69,14 @@ def generate_script(
         source_material=config.get("source_material", ""),
     )
 
+    # Append revision feedback from critique retry when present
+    revision_feedback = config.get("revision_feedback", "")
+    if revision_feedback:
+        user_prompt += (
+            f"\n\nREVISION FEEDBACK from quality review:\n{revision_feedback}\n"
+            "Address each point in the revised script."
+        )
+
     # --- 2. Call LLM with retry/repair loop --------------------------------
     client = _create_client(config)
     provider = config["script"].get("provider", "openai")

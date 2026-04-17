@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.captions import _format_srt_time
 from src.stage_edit import compose_video
 
@@ -113,6 +115,9 @@ def test_format_srt_time_millisecond_precision():
 # ══════════════════════════════════════════════════════════════════════════
 # captions.generate_captions (mocked faster-whisper)
 # ══════════════════════════════════════════════════════════════════════════
+
+
+faster_whisper = pytest.importorskip("faster_whisper", reason="faster_whisper not installed")
 
 
 @patch("faster_whisper.WhisperModel")

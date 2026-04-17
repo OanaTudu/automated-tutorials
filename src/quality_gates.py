@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
+from .ffmpeg_helpers import probe_video
 from .models import TutorialScript
 
 logger = logging.getLogger(__name__)
@@ -98,5 +100,84 @@ def validate_script(
         logger.warning("Script validation found %d issue(s)", len(errors))
     else:
         logger.info("Script passed all quality gates")
+
+    return errors
+
+
+def validate_video(
+    video_path: Path,
+    expected_duration: float,
+    config: dict,
+) -> list[str]:
+    """Return validation errors for a produced video file. Empty list means pass."""
+    errors: list[str] = []
+    val_cfg = config.get("post", {}).get("validation", {})
+    if not val_cfg.get("enabled", True):
+        return errors
+
+    if not video_path.exists():
+        return [f"Video file does not exist: {video_path}"]
+
+    probe = probe_video(video_path)
+    streams = probe.get("streams", [])
+    fmt = probe.get("format", {})
+
+    # Find video and audio streams
+    video_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
+    audio_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+
+    # Duration check
+    actual_duration = float(fmt.get("duration", 0))
+    tolerance_pct = val_cfg.get("duration_tolerance_pct", 15) / 100
+    if abs(actual_duration - expected_duration) > expected_duration * tolerance_pct:
+        errors.append(
+            f"Duration {actual_duration:.1f}s outside ±{tolerance_pct * 100:.0f}% "
+            f"of expected {expected_duration:.1f}s"
+        )
+
+    # Resolution check
+    if video_stream:
+        expected_res = config.get("post", {}).get("resolution", "1920x1080")
+        w, h = expected_res.split("x")
+        actual_w = video_stream.get("width", 0)
+        actual_h = video_stream.get("height", 0)
+        if actual_w != int(w) or actual_h != int(h):
+            errors.append(f"Resolution {actual_w}x{actual_h} != expected {expected_res}")
+    else:
+        errors.append("No video stream found")
+
+    # FPS check
+    if video_stream:
+        expected_fps = config.get("post", {}).get("fps", 30)
+        r_frame_rate = video_stream.get("r_frame_rate", "0/1")
+        num, den = r_frame_rate.split("/")
+        actual_fps = int(num) / max(int(den), 1)
+        if abs(actual_fps - expected_fps) > 1:
+            errors.append(f"FPS {actual_fps:.1f} != expected {expected_fps}")
+
+    # Audio stream present
+    if not audio_stream:
+        errors.append("No audio stream found")
+
+    # A/V sync check
+    max_drift = val_cfg.get("max_av_drift_sec", 0.5)
+    if video_stream and audio_stream:
+        v_dur = float(video_stream.get("duration", fmt.get("duration", 0)))
+        a_dur = float(audio_stream.get("duration", fmt.get("duration", 0)))
+        drift = abs(v_dur - a_dur)
+        if drift > max_drift:
+            errors.append(f"A/V drift {drift:.2f}s exceeds {max_drift}s threshold")
+
+    # File size sanity
+    min_size_kb = val_cfg.get("min_file_size_kb", 100)
+    actual_size_kb = video_path.stat().st_size / 1024
+    if actual_size_kb < min_size_kb:
+        errors.append(f"File size {actual_size_kb:.0f}KB below minimum {min_size_kb}KB")
+
+    # Codec compliance
+    if video_stream and video_stream.get("codec_name") != "h264":
+        errors.append(f"Video codec {video_stream.get('codec_name')} != expected h264")
+    if audio_stream and audio_stream.get("codec_name") != "aac":
+        errors.append(f"Audio codec {audio_stream.get('codec_name')} != expected aac")
 
     return errors

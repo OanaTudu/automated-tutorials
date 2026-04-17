@@ -7,6 +7,11 @@ import pytest
 from src.models import Section, Shot, StageResult, TutorialScript
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "integration: requires ffmpeg or real subprocess calls")
+    config.addinivalue_line("markers", "live: requires live API credentials and network")
+
+
 def _make_shot(
     id: str = "s1-shot1",
     start: float = 0.0,

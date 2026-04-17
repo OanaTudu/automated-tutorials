@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from src.models import ResearchResult, StageResult, TutorialScript
+from src.models import CritiqueResult, ResearchResult, StageResult, TutorialScript
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -64,6 +64,7 @@ def _setup_research_mock(mock_research, tmp_path: Path) -> None:
 @patch("src.make_tutorial.compose_video")
 @patch("src.make_tutorial.record_demo")
 @patch("src.make_tutorial.synthesize_voice")
+@patch("src.make_tutorial.validate_video")
 @patch("src.make_tutorial.validate_script")
 @patch("src.make_tutorial.generate_script")
 @patch("src.make_tutorial.research_topic")
@@ -71,6 +72,7 @@ def test_make_tutorial_chains_all_stages(
     mock_research,
     mock_gen_script,
     mock_validate,
+    mock_validate_video,
     mock_tts,
     mock_record,
     mock_compose,
@@ -98,8 +100,7 @@ def test_make_tutorial_chains_all_stages(
         stage="script", success=True, output_path=str(script_json_path)
     )
     mock_validate.return_value = []  # passes quality gate
-
-    # TTS
+    mock_validate_video.return_value = []  # passes video validation
     voice_path = tmp_path / "02_voice" / "voice.wav"
     voice_path.parent.mkdir(parents=True, exist_ok=True)
     voice_path.touch()
@@ -127,8 +128,17 @@ def test_make_tutorial_chains_all_stages(
     )
 
     # Critique
+    critique_path = tmp_path / "critique.json"
+    critique_data = CritiqueResult(
+        scores={"accuracy": 8.0, "completeness": 8.0, "pacing": 7.5},
+        overall_grade=8.0,
+        strengths=["Good coverage"],
+        improvements=[],
+        summary="Well done",
+    )
+    critique_path.write_text(critique_data.model_dump_json(), encoding="utf-8")
     mock_critique.return_value = StageResult(
-        stage="critique", success=True, output_path=str(tmp_path / "critique.json")
+        stage="critique", success=True, output_path=str(critique_path)
     )
 
     result = make_tutorial("python basics", config_path=cfg_path)
@@ -137,6 +147,7 @@ def test_make_tutorial_chains_all_stages(
     mock_research.assert_called_once()
     mock_gen_script.assert_called_once()
     mock_validate.assert_called_once()
+    mock_validate_video.assert_called_once()
     mock_tts.assert_called_once()
     mock_record.assert_called_once()
     mock_compose.assert_called_once()
@@ -186,6 +197,7 @@ def test_make_tutorial_raises_on_quality_gate_failure(
 @patch("src.make_tutorial.compose_video")
 @patch("src.make_tutorial.record_demo")
 @patch("src.make_tutorial.synthesize_voice")
+@patch("src.make_tutorial.validate_video")
 @patch("src.make_tutorial.validate_script")
 @patch("src.make_tutorial.generate_script")
 @patch("src.make_tutorial.research_topic")
@@ -193,6 +205,7 @@ def test_make_tutorial_creates_dated_slug_directory(
     mock_research,
     mock_gen_script,
     mock_validate,
+    mock_validate_video,
     mock_tts,
     mock_record,
     mock_compose,
@@ -217,6 +230,7 @@ def test_make_tutorial_creates_dated_slug_directory(
         stage="script", success=True, output_path=str(script_json_path)
     )
     mock_validate.return_value = []
+    mock_validate_video.return_value = []
     mock_tts.return_value = StageResult(
         stage="tts", success=True, output_path=str(tmp_path / "voice.wav")
     )
@@ -229,8 +243,18 @@ def test_make_tutorial_creates_dated_slug_directory(
     rendered.parent.mkdir(parents=True, exist_ok=True)
     rendered.touch()
     mock_compose.return_value = StageResult(stage="edit", success=True, output_path=str(rendered))
+
+    critique_path = tmp_path / "critique.json"
+    critique_data = CritiqueResult(
+        scores={"accuracy": 8.0, "completeness": 8.0, "pacing": 7.5},
+        overall_grade=8.0,
+        strengths=["Good coverage"],
+        improvements=[],
+        summary="Well done",
+    )
+    critique_path.write_text(critique_data.model_dump_json(), encoding="utf-8")
     mock_critique.return_value = StageResult(
-        stage="critique", success=True, output_path=str(tmp_path / "critique.json")
+        stage="critique", success=True, output_path=str(critique_path)
     )
 
     result = make_tutorial("git rebase", config_path=cfg_path)
@@ -247,6 +271,7 @@ def test_make_tutorial_creates_dated_slug_directory(
 @patch("src.make_tutorial.compose_video")
 @patch("src.make_tutorial.record_demo")
 @patch("src.make_tutorial.synthesize_voice")
+@patch("src.make_tutorial.validate_video")
 @patch("src.make_tutorial.validate_script")
 @patch("src.make_tutorial.generate_script")
 @patch("src.make_tutorial.research_topic")
@@ -254,6 +279,7 @@ def test_make_tutorial_skips_captions_when_no_engine(
     mock_research,
     mock_gen_script,
     mock_validate,
+    mock_validate_video,
     mock_tts,
     mock_record,
     mock_compose,
@@ -280,6 +306,7 @@ def test_make_tutorial_skips_captions_when_no_engine(
         stage="script", success=True, output_path=str(script_json_path)
     )
     mock_validate.return_value = []
+    mock_validate_video.return_value = []
     mock_tts.return_value = StageResult(
         stage="tts", success=True, output_path=str(tmp_path / "voice.wav")
     )
@@ -291,8 +318,18 @@ def test_make_tutorial_skips_captions_when_no_engine(
     rendered.parent.mkdir(parents=True, exist_ok=True)
     rendered.touch()
     mock_compose.return_value = StageResult(stage="edit", success=True, output_path=str(rendered))
+
+    critique_path = tmp_path / "critique.json"
+    critique_data = CritiqueResult(
+        scores={"accuracy": 8.0, "completeness": 8.0, "pacing": 7.5},
+        overall_grade=8.0,
+        strengths=["Good coverage"],
+        improvements=[],
+        summary="Well done",
+    )
+    critique_path.write_text(critique_data.model_dump_json(), encoding="utf-8")
     mock_critique.return_value = StageResult(
-        stage="critique", success=True, output_path=str(tmp_path / "critique.json")
+        stage="critique", success=True, output_path=str(critique_path)
     )
 
     make_tutorial("python basics", config_path=cfg_path)

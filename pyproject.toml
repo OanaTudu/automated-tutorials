@@ -30,6 +30,11 @@ packages = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: requires ffmpeg or real subprocess calls",
+    "live: requires live API credentials and network",
+]
+addopts = "-m 'not integration and not live'"
 
 [tool.ruff]
 target-version = "py311"

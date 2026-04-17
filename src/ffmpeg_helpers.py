@@ -2,11 +2,43 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def probe_video(path: Path) -> dict:
+    """Return ffprobe JSON metadata for a media file."""
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_format",
+            "-show_streams",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def probe_audio_duration_ms(path: Path) -> int:
+    """Return audio duration in milliseconds."""
+    data = probe_video(path)
+    for stream in data.get("streams", []):
+        if stream.get("codec_type") == "audio":
+            return int(float(stream["duration"]) * 1000)
+    fmt_dur = data.get("format", {}).get("duration")
+    if fmt_dur:
+        return int(float(fmt_dur) * 1000)
+    msg = f"Cannot determine duration for {path}"
+    raise ValueError(msg)
 
 
 def normalize_video(input_path: Path, output_path: Path, cfg: dict) -> None:

@@ -102,3 +102,27 @@ def test_ssml_uses_default_style_when_not_configured(sample_script):
     cfg = {"voice": "en-US-AvaMultilingualNeural"}
     ssml = build_ssml(sample_script, cfg)
     assert "narration-professional" in ssml
+
+
+# ── Mark tags ────────────────────────────────────────────────────────────
+
+
+def test_ssml_contains_hook_mark_tags(sample_script):
+    ssml = build_ssml(sample_script, _default_cfg())
+    assert '<mark name="hook_start"/>' in ssml
+    assert '<mark name="hook_end"/>' in ssml
+
+
+def test_ssml_contains_section_mark_tags(sample_script):
+    ssml = build_ssml(sample_script, _default_cfg())
+    for i in range(len(sample_script.sections)):
+        assert f'<mark name="section_{i}_start"/>' in ssml
+        assert f'<mark name="section_{i}_end"/>' in ssml
+
+
+def test_ssml_contains_recap_and_cta_mark_tags(sample_script):
+    ssml = build_ssml(sample_script, _default_cfg())
+    assert '<mark name="recap_start"/>' in ssml
+    assert '<mark name="recap_end"/>' in ssml
+    assert '<mark name="cta_start"/>' in ssml
+    assert '<mark name="cta_end"/>' in ssml

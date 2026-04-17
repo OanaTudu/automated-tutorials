@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 import textwrap
 from pathlib import Path
 
 from .ffmpeg_helpers import normalize_video
-from .models import StageResult, TutorialScript
+from .models import StageResult, TimingManifest, TutorialScript
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,17 @@ def record_demo(
     output_dir.mkdir(parents=True, exist_ok=True)
     mode: str = config["recording"]["mode"]
 
+    # Load timing manifest from voice stage output when available
+    timing_manifest: TimingManifest | None = None
+    manifest_path = output_dir.parent / "02_voice" / "timing_manifest.json"
+    if manifest_path.exists():
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        timing_manifest = TimingManifest.model_validate(manifest_data)
+
     if mode == "playwright":
-        raw_path = _record_playwright(script, output_dir, config["recording"])
+        raw_path = _record_playwright(
+            script, output_dir, config["recording"], timing_manifest=timing_manifest,
+        )
     elif mode == "obs":
         raw_path = _record_obs(script, output_dir, config["recording"])
     else:
@@ -57,40 +67,76 @@ def record_demo(
 # ---------------------------------------------------------------------------
 
 
-def _generate_demo_script(script: TutorialScript, output_path: Path) -> None:
+def _shot_id(section_idx: int) -> str:
+    """Map a section index to the timing-manifest segment ID convention."""
+    return f"section_{section_idx}"
+
+
+def _generate_demo_script(
+    script: TutorialScript,
+    output_path: Path,
+    timing_manifest: TimingManifest | None = None,
+) -> None:
     """Generate a standalone Playwright Python script that automates a browser demo.
 
     The generated file opens pages, types code, and demonstrates concepts from
     the tutorial shot list.  It is a best-effort template — downstream callers
     should expect rough edges and treat the recording as a starting point.
+
+    When *timing_manifest* is provided, the generated script uses elapsed-time
+    waits synchronised to the voice track instead of hardcoded shot durations.
     """
+    # Build timing lookup: segment ID -> start_ms
+    timing_lookup: dict[str, int] = {}
+    if timing_manifest:
+        timing_lookup = {seg.id: seg.start_ms for seg in timing_manifest.segments}
+
+    use_timing = bool(timing_lookup)
+
     shot_blocks: list[str] = []
-    for section in script.sections:
+    if use_timing:
+        shot_blocks.append("    recording_start = time.time()")
+
+    for section_idx, section in enumerate(script.sections):
         shot_blocks.append(f"    # --- Section: {section.title} ---")
-        for shot in section.shots:
-            delay_ms = int((shot.end_sec - shot.start_sec) * 1000)
+        section_start_ms = timing_lookup.get(_shot_id(section_idx))
+
+        for shot_idx, shot in enumerate(section.shots):
             visual = shot.visual.replace("\\", "\\\\").replace('"', '\\"')
+
+            if section_start_ms is not None and shot_idx == 0:
+                # First shot in section: sync to manifest timing
+                shot_blocks.append(
+                    f"    elapsed_ms = (time.time() - recording_start) * 1000\n"
+                    f"    remaining = max(0, {section_start_ms} - elapsed_ms)"
+                )
+                wait_expr = "int(remaining)"
+            else:
+                # Fallback: original shot-based delay
+                delay_ms = int((shot.end_sec - shot.start_sec) * 1000)
+                wait_expr = str(delay_ms)
 
             if visual.startswith(("http://", "https://")):
                 shot_blocks.append(
                     f'    page.goto("{visual}")\n'
-                    f'    page.wait_for_timeout({delay_ms})  # {shot.id}'
+                    f'    page.wait_for_timeout({wait_expr})  # {shot.id}'
                 )
             else:
                 # Treat as terminal / code typing action
                 shot_blocks.append(
                     f'    # visual: {visual}\n'
-                    f'    page.wait_for_timeout({delay_ms})  # {shot.id}'
+                    f'    page.wait_for_timeout({wait_expr})  # {shot.id}'
                 )
 
     shots_code = "\n".join(shot_blocks)
     vw = 1280
     vh = 720
+    extra_import = "\n        import time" if use_timing else ""
     # Allow callers to override defaults later via the generated file itself
     content = textwrap.dedent(f"""\
         \"\"\"Auto-generated Playwright demo script for: {script.topic}\"\"\"
 
-        import sys
+        import sys{extra_import}
         from pathlib import Path
         from playwright.sync_api import sync_playwright
 
@@ -124,12 +170,13 @@ def _record_playwright(
     script: TutorialScript,
     output_dir: Path,
     cfg: dict,
+    timing_manifest: TimingManifest | None = None,
 ) -> Path:
     """Generate and run a Playwright script that records video of the demo flow."""
     raw_path = output_dir / "raw_playwright.webm"
     demo_script = output_dir / "demo_script.py"
 
-    _generate_demo_script(script, demo_script)
+    _generate_demo_script(script, demo_script, timing_manifest=timing_manifest)
 
     result = subprocess.run(
         ["python", str(demo_script), str(output_dir)],

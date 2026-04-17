@@ -80,23 +80,31 @@ def build_ssml(script: TutorialScript, cfg: dict) -> str:
     ]
 
     # Hook
+    parts.append('      <mark name="hook_start"/>')
     parts.append(f'      <prosody rate="{escape(rate)}">{escape(script.hook)}</prosody>')
+    parts.append('      <mark name="hook_end"/>')
     parts.append('      <break time="500ms"/>')
 
     # Sections — code-heavy sections use a slower rate
-    for section in script.sections:
+    for i, section in enumerate(script.sections):
         section_rate = slow_rate if _is_code_section(section.title, section.narration) else rate
         narration = _add_emphasis(escape(section.narration), section.key_points)
+        parts.append(f'      <mark name="section_{i}_start"/>')
         parts.append(f'      <prosody rate="{escape(section_rate)}">{narration}</prosody>')
+        parts.append(f'      <mark name="section_{i}_end"/>')
         parts.append('      <break time="600ms"/>')
 
     # Breathing room before recap
     parts.append('      <break time="400ms"/>')
 
     # Recap and CTA
+    parts.append('      <mark name="recap_start"/>')
     parts.append(f'      <prosody rate="{escape(rate)}">{escape(script.recap)}</prosody>')
+    parts.append('      <mark name="recap_end"/>')
     parts.append('      <break time="300ms"/>')
+    parts.append('      <mark name="cta_start"/>')
     parts.append(f'      <prosody rate="{escape(rate)}">{escape(script.cta)}</prosody>')
+    parts.append('      <mark name="cta_end"/>')
 
     parts.append("    </mstts:express-as>")
     parts.append("  </voice>")

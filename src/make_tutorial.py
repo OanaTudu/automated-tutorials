@@ -9,8 +9,8 @@ from pathlib import Path
 import yaml
 
 from .captions import generate_captions
-from .models import ResearchResult, TutorialScript
-from .quality_gates import validate_script
+from .models import CritiqueResult, ResearchResult, TutorialScript
+from .quality_gates import validate_script, validate_video
 from .stage_critique import critique_tutorial
 from .stage_edit import compose_video
 from .stage_record import record_demo
@@ -84,60 +84,113 @@ def make_tutorial(
     )
     config["source_material"] = _format_research(research)
 
-    # Stage 1: Script generation
-    logger.info("Stage 1: Generating script for '%s'", topic)
-    script_result = generate_script(topic, run_dir / "01_script", config)
-    script = TutorialScript.model_validate_json(
-        Path(script_result.output_path).read_text(encoding="utf-8"),
-    )
+    # Critique retry configuration
+    critique_cfg = config.get("critique", {})
+    critique_enabled = critique_cfg.get("enabled", True)
+    max_retries = critique_cfg.get("max_retries", 2) if critique_enabled else 0
+    min_grade = critique_cfg.get("min_overall_grade", 7.0)
+    min_category = critique_cfg.get("min_category_score", 4.0)
 
-    # Quality gate
-    errors = validate_script(
-        script,
-        max_seconds=config["pipeline"]["max_duration_seconds"],
-        audience=audience,
-    )
-    if errors:
-        raise ValueError(f"Script quality gate failed: {errors}")
+    prev_grade = 0.0
+    edit_result = None
 
-    # Stage 2: Voice synthesis
-    logger.info("Stage 2: Synthesizing voice")
-    voice_result = synthesize_voice(script, run_dir / "02_voice", config)
-
-    # Stage 3: Screen recording
-    logger.info("Stage 3: Recording screen demo")
-    screen_result = record_demo(script, run_dir / "03_screen", config)
-
-    # Stage 4: Captions (optional)
-    srt_path: Path | None = None
-    if config["post"].get("captions", {}).get("engine"):
-        logger.info("Stage 4a: Generating captions")
-        srt_path = generate_captions(
-            Path(voice_result.output_path),
-            run_dir / "02_voice",
-            config,
+    for attempt in range(max_retries + 1):
+        # Stage 1: Script generation
+        logger.info("Stage 1: Generating script for '%s' (attempt %d)", topic, attempt + 1)
+        script_result = generate_script(topic, run_dir / "01_script", config)
+        script = TutorialScript.model_validate_json(
+            Path(script_result.output_path).read_text(encoding="utf-8"),
         )
 
-    # Stage 5: Post-production
-    logger.info("Stage 5: Composing final video")
-    edit_result = compose_video(
-        Path(screen_result.output_path),
-        Path(voice_result.output_path),
-        run_dir / "04_render",
-        config,
-        srt_path=srt_path,
-    )
+        # Quality gate
+        errors = validate_script(
+            script,
+            max_seconds=config["pipeline"]["max_duration_seconds"],
+            audience=audience,
+        )
+        if errors:
+            raise ValueError(f"Script quality gate failed: {errors}")
 
-    # Publish
+        # Stage 2: Voice synthesis
+        logger.info("Stage 2: Synthesizing voice")
+        voice_result = synthesize_voice(script, run_dir / "02_voice", config)
+
+        # Stage 3: Screen recording
+        logger.info("Stage 3: Recording screen demo")
+        screen_result = record_demo(script, run_dir / "03_screen", config)
+
+        # Stage 4: Captions (optional)
+        srt_path: Path | None = None
+        if config["post"].get("captions", {}).get("engine"):
+            logger.info("Stage 4a: Generating captions")
+            srt_path = generate_captions(
+                Path(voice_result.output_path),
+                run_dir / "02_voice",
+                config,
+            )
+
+        # Stage 5: Post-production
+        logger.info("Stage 5: Composing final video")
+        edit_result = compose_video(
+            Path(screen_result.output_path),
+            Path(voice_result.output_path),
+            run_dir / "04_render",
+            config,
+            srt_path=srt_path,
+        )
+
+        # Video validation
+        video_errors = validate_video(
+            Path(edit_result.output_path),
+            script.total_target_seconds,
+            config,
+        )
+        if video_errors:
+            raise ValueError(f"Video quality gate failed: {video_errors}")
+
+        # Critique (if enabled)
+        if not critique_enabled:
+            break
+
+        logger.info("Stage 6: Critiquing tutorial (attempt %d)", attempt + 1)
+        critique_stage_result = critique_tutorial(
+            script, research, run_dir / "06_critique", config, audience=audience,
+        )
+        critique_result = CritiqueResult.model_validate_json(
+            Path(critique_stage_result.output_path).read_text(encoding="utf-8"),
+        )
+
+        # Check if critique passes
+        scores_pass = all(v >= min_category for v in critique_result.scores.values())
+        if critique_result.overall_grade >= min_grade and scores_pass:
+            logger.info("Critique passed: grade=%.1f", critique_result.overall_grade)
+            break
+
+        # Divergence detection: stop if grade not improving
+        if attempt > 0 and critique_result.overall_grade <= prev_grade:
+            logger.warning(
+                "Grade not improving (%.1f -> %.1f), stopping retries",
+                prev_grade, critique_result.overall_grade,
+            )
+            break
+
+        prev_grade = critique_result.overall_grade
+
+        if attempt < max_retries:
+            logger.warning(
+                "Critique attempt %d: grade=%.1f, retrying",
+                attempt + 1, critique_result.overall_grade,
+            )
+            config["revision_feedback"] = "\n".join(critique_result.improvements)
+        else:
+            logger.warning("Critique max retries reached, proceeding with best attempt")
+
+    # Publish (after critique loop)
     publish_dir = run_dir / "05_publish"
     publish_dir.mkdir(parents=True, exist_ok=True)
     final_path = publish_dir / "tutorial.mp4"
     Path(edit_result.output_path).replace(final_path)
 
     logger.info("Tutorial published: %s", final_path)
-
-    # Stage 6: Self-critique
-    logger.info("Stage 6: Critiquing tutorial")
-    critique_tutorial(script, research, run_dir / "06_critique", config, audience=audience)
 
     return final_path

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.models import TimingManifest, TimingSegment
 from src.stage_tts import _dispatch, synthesize_voice
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
@@ -42,14 +43,22 @@ def test_dispatch_unknown_provider_raises(sample_script, tmp_path, tts_config):
 
 def test_dispatch_accepts_azure_alias(sample_script, tmp_path, tts_config):
     """Both 'azure_speech' and 'azure' should route to Azure."""
-    with patch("src.stage_tts._synthesize_azure", return_value=tmp_path / "voice.wav") as mock_az:
+    dummy_manifest = TimingManifest(total_duration_ms=0, segments=[])
+    with patch(
+        "src.stage_tts._synthesize_azure",
+        return_value=(tmp_path / "voice.wav", dummy_manifest),
+    ) as mock_az:
         _dispatch("azure", sample_script, tmp_path, tts_config)
         mock_az.assert_called_once()
 
 
 def test_dispatch_accepts_openai_alias(sample_script, tmp_path, tts_config):
     """Both 'openai_tts' and 'openai' should route to OpenAI."""
-    with patch("src.stage_tts._synthesize_openai", return_value=tmp_path / "voice.wav") as mock_oai:
+    dummy_manifest = TimingManifest(total_duration_ms=0, segments=[])
+    with patch(
+        "src.stage_tts._synthesize_openai",
+        return_value=(tmp_path / "voice.wav", dummy_manifest),
+    ) as mock_oai:
         _dispatch("openai", sample_script, tmp_path, tts_config)
         mock_oai.assert_called_once()
 
@@ -59,12 +68,17 @@ def test_dispatch_accepts_openai_alias(sample_script, tmp_path, tts_config):
 
 @patch("src.stage_tts._dispatch")
 def test_synthesize_voice_primary_success(mock_dispatch, sample_script, tmp_path, pipeline_config):
-    mock_dispatch.return_value = tmp_path / "voice.wav"
+    dummy_manifest = TimingManifest(total_duration_ms=1000, segments=[
+        TimingSegment(id="hook", start_ms=0, end_ms=500),
+    ])
+    mock_dispatch.return_value = (tmp_path / "voice.wav", dummy_manifest)
 
     result = synthesize_voice(sample_script, tmp_path, pipeline_config)
 
     assert result.success is True
     assert result.stage == "tts"
+    assert "manifest_path" in result.metadata
+    assert (tmp_path / "timing_manifest.json").exists()
     mock_dispatch.assert_called_once_with(
         "azure_speech", sample_script, tmp_path, pipeline_config["tts"]
     )
@@ -76,7 +90,11 @@ def test_synthesize_voice_primary_success(mock_dispatch, sample_script, tmp_path
 @patch("src.stage_tts._dispatch")
 def test_synthesize_voice_falls_back(mock_dispatch, sample_script, tmp_path, pipeline_config):
     """When the primary provider raises, the fallback is tried."""
-    mock_dispatch.side_effect = [RuntimeError("Azure unavailable"), tmp_path / "voice.wav"]
+    dummy_manifest = TimingManifest(total_duration_ms=0, segments=[])
+    mock_dispatch.side_effect = [
+        RuntimeError("Azure unavailable"),
+        (tmp_path / "voice.wav", dummy_manifest),
+    ]
 
     result = synthesize_voice(sample_script, tmp_path, pipeline_config)
 
@@ -87,6 +105,10 @@ def test_synthesize_voice_falls_back(mock_dispatch, sample_script, tmp_path, pip
 
 
 # ── Azure synthesizer ───────────────────────────────────────────────────
+
+speechsdk = pytest.importorskip(
+    "azure.cognitiveservices.speech", reason="azure-cognitiveservices-speech not installed"
+)
 
 
 @patch.dict("os.environ", {"AZURE_SPEECH_KEY": "fake-key", "AZURE_SPEECH_REGION": "eastus"})
@@ -105,12 +127,18 @@ def test_azure_synthesizer_calls_sdk(
 
     mock_result = MagicMock()
     mock_result.reason = speechsdk.ResultReason.SynthesizingAudioCompleted
+    mock_result.audio_duration = None
     mock_synth.speak_ssml_async.return_value.get.return_value = mock_result
 
-    path = _synthesize_azure(sample_script, tmp_path, tts_config["azure"])
+    # Provide a bookmark_reached event connector
+    mock_synth.bookmark_reached = MagicMock()
+
+    path, manifest = _synthesize_azure(sample_script, tmp_path, tts_config["azure"])
 
     assert path == tmp_path / "voice.wav"
+    assert isinstance(manifest, TimingManifest)
     mock_synth.speak_ssml_async.assert_called_once()
+    mock_synth.bookmark_reached.connect.assert_called_once()
 
 
 # ── OpenAI synthesizer ──────────────────────────────────────────────────
@@ -130,8 +158,9 @@ def test_openai_synthesizer_streams_to_file(mock_openai_cls, sample_script, tmp_
     mock_stream_ctx.__exit__ = MagicMock(return_value=False)
     mock_client.audio.speech.with_streaming_response.create.return_value = mock_stream_ctx
 
-    path = _synthesize_openai(sample_script, tmp_path, tts_config["openai"])
+    path, manifest = _synthesize_openai(sample_script, tmp_path, tts_config["openai"])
 
     assert path == tmp_path / "voice.wav"
+    assert isinstance(manifest, TimingManifest)
     # Per-segment path fails without ffmpeg, so fallback writes voice.wav
     mock_response.stream_to_file.assert_any_call(tmp_path / "voice.wav")

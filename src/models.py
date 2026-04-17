@@ -86,3 +86,28 @@ class StageResult(BaseModel):
     success: bool
     output_path: str
     metadata: dict[str, str | int | float] = {}
+
+
+class TimingSegment(BaseModel):
+    """A single named timing segment within a tutorial."""
+
+    id: str
+    start_ms: int
+    end_ms: int
+    text: str = ""
+
+
+class TimingManifest(BaseModel):
+    """Timing manifest shared between TTS, recording, and editing stages."""
+
+    total_duration_ms: int
+    segments: list[TimingSegment]
+
+    def slot_duration_ms(self, index: int) -> int:
+        """Duration from this segment's start to the next segment's start (or end)."""
+        if index + 1 < len(self.segments):
+            return self.segments[index + 1].start_ms - self.segments[index].start_ms
+        return self.end_ms_for(index) - self.segments[index].start_ms
+
+    def end_ms_for(self, index: int) -> int:
+        return self.segments[index].end_ms
