@@ -426,7 +426,125 @@ def _screenshot_slides(
 
 
 # ---------------------------------------------------------------------------
-# ffmpeg video composition
+# Keyframe-based screenshotting (visual engine path)
+# ---------------------------------------------------------------------------
+
+
+def _screenshot_keyframes(
+    keyframes: list,
+    output_dir: Path,
+) -> tuple[list[Path], list[float]]:
+    """Screenshot each keyframe and return (image_paths, durations_sec).
+
+    Parameters
+    ----------
+    keyframes:
+        List of ``Keyframe`` objects from :mod:`visual_engine`, each with
+        ``.html`` (str) and ``.duration_ms`` (int).
+    output_dir:
+        Directory where PNG files are written.
+
+    Returns
+    -------
+    tuple[list[Path], list[float]]
+        Parallel lists of PNG file paths and their durations in seconds.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise ImportError(
+            "Playwright is required for keyframe rendering. "
+            "Install it with: pip install playwright && python -m playwright install chromium"
+        ) from None
+
+    image_paths: list[Path] = []
+    durations: list[float] = []
+
+    logger.info("Screenshotting %d keyframes with Playwright …", len(keyframes))
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": _WIDTH, "height": _HEIGHT})
+
+        for idx, kf in enumerate(keyframes):
+            png_path = output_dir / f"kf_{idx:04d}_{kf.shot_id}.png"
+            page.set_content(kf.html, wait_until="load")
+            page.screenshot(path=str(png_path), full_page=False)
+            image_paths.append(png_path)
+            durations.append(kf.duration_ms / 1000.0)
+
+        browser.close()
+
+    logger.info("All %d keyframes screenshotted.", len(keyframes))
+    return image_paths, durations
+
+
+def _compose_keyframe_video(
+    image_paths: list[Path],
+    durations: list[float],
+    output_dir: Path,
+) -> Path:
+    """Stitch keyframe PNGs into a single MP4 using the ffmpeg concat demuxer.
+
+    Parameters
+    ----------
+    image_paths:
+        Ordered list of PNG file paths.
+    durations:
+        Parallel list of display durations in seconds.
+    output_dir:
+        Directory for intermediate files and the output video.
+
+    Returns
+    -------
+    Path
+        Path to the output ``slides_video.mp4``.
+    """
+    if not shutil.which("ffmpeg"):
+        raise FileNotFoundError(
+            "ffmpeg not found on PATH. Install it with: winget install ffmpeg"
+        )
+
+    concat_lines: list[str] = []
+    for img_path, dur in zip(image_paths, durations):
+        concat_lines.append(f"file '{img_path.name}'")
+        concat_lines.append(f"duration {dur:.3f}")
+
+    # ffmpeg concat requires last file repeated without duration
+    if image_paths:
+        concat_lines.append(f"file '{image_paths[-1].name}'")
+
+    concat_path = output_dir / "concat_list.txt"
+    concat_path.write_text("\n".join(concat_lines), encoding="utf-8")
+
+    video_path = output_dir / "slides_video.mp4"
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", str(concat_path.resolve()),
+        "-vf", "fps=30",
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        str(video_path.resolve()),
+    ]
+    logger.info("Composing keyframe video (%d frames) …", len(image_paths))
+
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, cwd=str(output_dir.resolve()),
+    )
+    if result.returncode != 0:
+        logger.error("ffmpeg stderr:\n%s", result.stderr)
+        result.check_returncode()
+
+    logger.info("Keyframe video created: %s", video_path)
+    return video_path
+
+
+# ---------------------------------------------------------------------------
+# ffmpeg video composition (legacy static slides)
 # ---------------------------------------------------------------------------
 
 
@@ -528,25 +646,16 @@ def render_slide_video(
     output_dir: Path,
     research_data: dict | None = None,
 ) -> Path:
-    """Generate a slide-based video from script data.
+    """Generate a visual-engine-driven video from script data.
 
     Steps:
-        1. Build styled HTML for each timing segment.
-        2. Screenshot every slide at 1920×1080 via Playwright (headless).
-        3. Stitch PNGs into an H.264 MP4 with ffmpeg, timed to the manifest.
+        1. Generate keyframes via :func:`visual_engine.generate_visual_frames`
+           (VS Code mock-ups, terminal views, extension panels, etc.).
+        2. Screenshot every keyframe at 1920×1080 via Playwright (headless).
+        3. Stitch PNGs into an H.264 MP4 with ffmpeg, timed per keyframe.
 
-    Parameters
-    ----------
-    script:
-        The full tutorial script with sections, shots, and narration.
-    timing_manifest:
-        Per-segment timing information (start/end in milliseconds).
-    output_dir:
-        Directory where slide PNGs, the concat list, and the final
-        ``slides_video.mp4`` will be written.
-    research_data:
-        Optional research dict; if it contains a ``code_examples`` list the
-        snippets are distributed across sections that reference code.
+    Falls back to the legacy static-slide path when the visual engine is
+    unavailable or encounters an error.
 
     Returns
     -------
@@ -555,14 +664,28 @@ def render_slide_video(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Generate HTML for each segment
-    logger.info("Generating slide HTML for '%s' …", script.topic)
-    slides = _generate_slide_html(script, research_data)
+    try:
+        from .visual_engine import generate_visual_frames
 
-    # 2. Screenshot each slide with Playwright
-    image_paths = _screenshot_slides(slides, output_dir)
+        logger.info("Generating interactive keyframes for '%s' …", script.topic)
+        keyframes = generate_visual_frames(script, timing_manifest, research_data)
 
-    # 3. Compose images into video with ffmpeg using timing
-    video_path = _compose_slide_video(image_paths, timing_manifest, output_dir)
+        if not keyframes:
+            raise RuntimeError("Visual engine produced no keyframes")
 
-    return video_path
+        # Screenshot each keyframe
+        image_paths, durations = _screenshot_keyframes(keyframes, output_dir)
+
+        # Compose into video
+        video_path = _compose_keyframe_video(image_paths, durations, output_dir)
+        return video_path
+
+    except Exception:
+        logger.warning(
+            "Visual engine failed — falling back to static slides",
+            exc_info=True,
+        )
+        # Legacy path: static slides
+        slides = _generate_slide_html(script, research_data)
+        image_paths_legacy = _screenshot_slides(slides, output_dir)
+        return _compose_slide_video(image_paths_legacy, timing_manifest, output_dir)
