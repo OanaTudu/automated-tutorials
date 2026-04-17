@@ -12,13 +12,19 @@ Requirements:
 1. Return a JSON object matching the schema exactly.
 2. Include a shot list for every section. Each shot list must contain at least one
    "code_walkthrough" shot that shows code being written, highlighted, or executed.
-3. Visual descriptions must reference the actual tool visible on screen — for
-   example "Jupyter notebook with a new cell importing pandas", "VS Code editor
-   with the train.py file open", "terminal running `python evaluate.py`", or
-   "browser showing the Plotly chart output".
+3. Visual descriptions must reference the actual VS Code panel visible on screen —
+   for example "VS Code Extensions sidebar with 'HVE Core' in search bar",
+   "VS Code Copilot Chat panel with @task-researcher agent selected",
+   "VS Code editor with explore_titanic.py open", "terminal running python script".
 4. Write all narration in a natural screen-share style — as if the presenter is
    talking the viewer through what they are doing on screen in real time (e.g.,
-   "Let me switch over to the notebook and load our dataset…").
+   "Let me click on the Extensions icon on the left sidebar…").
 5. Avoid generic or placeholder visuals like "slide with bullet points". Every
-   visual should depict something the viewer would actually see during a live
-   coding demo.
+   visual should depict something the viewer would actually see during a live demo.
+6. ALL code examples must be Python. No JavaScript or TypeScript.
+7. Use the Titanic dataset as the running example. Keep it simple: load, explore,
+   one basic prediction.
+8. No API keys or credentials are needed — the extension installs and works
+   immediately. Do NOT mention API keys, tokens, or authentication setup.
+9. Cover FEWER topics but explain each one thoroughly with exact click-by-click
+   instructions. The viewer has never used AI coding agents before.

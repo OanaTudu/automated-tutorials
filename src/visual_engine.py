@@ -210,47 +210,194 @@ def _extract_code_for_shot(
 ) -> tuple[str, str, str]:
     """Extract ``(filename, code, language)`` for an editor shot.
 
-    Searches research_data code_examples for a matching snippet, falling back to
-    a minimal placeholder based on the topic.
+    Uses the **section title** as the primary discriminator and shot-level
+    keywords as a secondary signal.  This prevents narration phrases like
+    "once the extension is installed" from accidentally matching the
+    install-screen code in every section.
     """
-    combined = f"{shot.visual} {shot.action} {section.narration}".lower()
-
-    # Determine desired language
-    py_hints = {"python", "flask", "django", "pip", ".py"}
-    js_hints = {"javascript", "react", "node", ".js", ".ts", "usestate"}
-    want_py = any(h in combined for h in py_hints)
-    want_js = any(h in combined for h in js_hints)
+    title = section.title.lower()
+    shot_text = f"{shot.visual} {shot.action}".lower()
 
     # Try to find a filename in the visual description
     filename_match = re.search(r"[\w\-]+\.\w{1,4}", shot.visual)
     filename = filename_match.group(0) if filename_match else None
 
-    # Search research code examples
+    # --- CODE SNIPPETS ----------------------------------------------------
+
+    _WELCOME = (
+        "# Welcome to your project\n"
+        "#\n"
+        "# Getting started:\n"
+        "# 1. Open Extensions (Ctrl+Shift+X)\n"
+        "# 2. Search for your extension\n"
+        "# 3. Click Install\n"
+        "# 4. Open the Chat panel to use AI agents"
+    )
+
+    _AGENT_PICKER = (
+        "# Available HVE agents:\n"
+        "#\n"
+        "# @task-researcher  - Research a topic\n"
+        "# @task-planner     - Create implementation plan\n"
+        "# @implementer      - Write the code\n"
+        "#\n"
+        "# Type @ in the chat to pick an agent"
+    )
+
+    _RESEARCH_NOTES = (
+        "# Titanic Dataset - Research Notes\n"
+        "#\n"
+        "# Key findings:\n"
+        "# - 891 passengers, 12 features\n"
+        "# - Survival rate: 38.4%\n"
+        "# - Missing values: Age (177), Cabin (687)\n"
+        "#\n"
+        "# Important features:\n"
+        "# - Pclass: strong correlation with survival\n"
+        "# - Sex: female survival rate much higher\n"
+        "# - Age: children had higher survival rate\n"
+        "# - Fare: higher fare = higher survival"
+    )
+
+    _EXPLORE_TITANIC = (
+        "import pandas as pd\n"
+        "\n"
+        "# Load the Titanic dataset\n"
+        "df = pd.read_csv('titanic.csv')\n"
+        "\n"
+        "# Quick overview\n"
+        "print(df.shape)          # (891, 12)\n"
+        "print(df.head())\n"
+        "\n"
+        "# Check missing values\n"
+        "print(df.isnull().sum())\n"
+        "\n"
+        "# Survival rate by class\n"
+        "print(df.groupby('Pclass')['Survived'].mean())"
+    )
+
+    _MODEL_CODE = (
+        "import pandas as pd\n"
+        "from sklearn.linear_model import LogisticRegression\n"
+        "from sklearn.model_selection import train_test_split\n"
+        "\n"
+        "df = pd.read_csv('titanic.csv')\n"
+        "\n"
+        "# Select features and target\n"
+        "features = ['Pclass', 'Age', 'SibSp', 'Fare']\n"
+        "X = df[features].fillna(df[features].median())\n"
+        "y = df['Survived']\n"
+        "\n"
+        "# Split and train\n"
+        "X_train, X_test, y_train, y_test = train_test_split(\n"
+        "    X, y, test_size=0.2, random_state=42\n"
+        ")\n"
+        "model = LogisticRegression(max_iter=200)\n"
+        "model.fit(X_train, y_train)\n"
+        "\n"
+        "# Evaluate\n"
+        "score = model.score(X_test, y_test)\n"
+        "print(f'Accuracy: {score:.2%}')"
+    )
+
+    _PLAN = (
+        "# Implementation Plan\n"
+        "#\n"
+        "# Task: Build Titanic survival predictor\n"
+        "#\n"
+        "# Step 1: Load and explore titanic.csv\n"
+        "# Step 2: Handle missing values (Age, Cabin)\n"
+        "# Step 3: Select features (Pclass, Age, Fare)\n"
+        "# Step 4: Train LogisticRegression model\n"
+        "# Step 5: Evaluate accuracy on test set\n"
+        "#\n"
+        "# Expected output: ~78% accuracy"
+    )
+
+    _TRACKING = (
+        "# .copilot-tracking/changes/\n"
+        "#\n"
+        "# Files created by HVE agents:\n"
+        "#  research/titanic-research.md\n"
+        "#  plans/titanic-plan.instructions.md\n"
+        "#  changes/titanic_model-changes.md\n"
+        "#  reviews/titanic_model-review.md\n"
+        "#\n"
+        "# All agent work is tracked here\n"
+        "# for full auditability."
+    )
+
+    # --- SECTION-TITLE-BASED ROUTING (primary) ----------------------------
+
+    # Section about installing extensions
+    if any(kw in title for kw in ("install", "extension", "opening")):
+        return filename or "README.md", _WELCOME, "python"
+
+    # Section about planning & implementing / model building (check BEFORE agent)
+    if any(kw in title for kw in ("plan", "implement", "model", "rpi")):
+        if any(kw in shot_text for kw in ("plan", "switch", "agent picker")):
+            return filename or "plan.md", _PLAN, "python"
+        if any(kw in shot_text for kw in ("terminal", "run", "python")):
+            return filename or "titanic_model.py", _MODEL_CODE, "python"
+        if any(kw in shot_text for kw in ("titanic_model", "code", "paste", "editor")):
+            return filename or "titanic_model.py", _MODEL_CODE, "python"
+        # Default for this section: show the model code
+        return filename or "titanic_model.py", _MODEL_CODE, "python"
+
+    # Section about meeting/discovering agents
+    if any(kw in title for kw in ("agent", "meet")):
+        return filename or "main.py", _AGENT_PICKER, "python"
+
+    # Section about research / exploration
+    if any(kw in title for kw in ("research", "explore", "titanic")):
+        if any(kw in shot_text for kw in ("tracking", "research.md", ".copilot", "folder")):
+            return filename or "research_notes.md", _RESEARCH_NOTES, "python"
+        if any(kw in shot_text for kw in ("editor", "content", "markdown", "scroll")):
+            return filename or "research_notes.md", _RESEARCH_NOTES, "python"
+        return filename or "explore_titanic.py", _EXPLORE_TITANIC, "python"
+
+    # Section about workflow review / wrap-up / benefits
+    if any(kw in title for kw in ("workflow", "why", "accelerate", "review", "wrap")):
+        if any(kw in shot_text for kw in ("tracking", "copilot-tracking", "structure", "folder")):
+            return filename or "changes.md", _TRACKING, "python"
+        return filename or "titanic_model.py", _MODEL_CODE, "python"
+
+    # --- SHOT-LEVEL FALLBACKS (secondary) ---------------------------------
+    combined = f"{shot_text} {section.narration}".lower()
+
+    if any(kw in combined for kw in ("install", "extension", "welcome", "marketplace")):
+        return filename or "README.md", _WELCOME, "python"
+
+    if any(kw in combined for kw in ("agent picker", "chat panel", "copilot chat")):
+        return filename or "main.py", _AGENT_PICKER, "python"
+
+    if any(kw in combined for kw in ("titanic", "explore", "dataset", "csv")):
+        return filename or "explore_titanic.py", _EXPLORE_TITANIC, "python"
+
+    if any(kw in combined for kw in ("model", "logistic", "predict", "train")):
+        return filename or "titanic_model.py", _MODEL_CODE, "python"
+
+    if any(kw in combined for kw in ("plan", "planning")):
+        return filename or "plan.md", _PLAN, "python"
+
+    if any(kw in combined for kw in ("tracking", "changes", "review")):
+        return filename or "changes.md", _TRACKING, "python"
+
+    # Fallback: search research code examples for Python
     if research_data:
         examples: list[str] = research_data.get("code_examples", [])
         for ex in examples:
             lang = _detect_language(ex)
-            if want_py and lang in ("python", "py"):
+            if lang in ("python", "py"):
                 code = _strip_fences(ex)
                 fn = filename or "main.py"
                 return fn, code, "python"
-            if want_js and lang in ("javascript", "js", "jsx", "typescript", "ts"):
-                code = _strip_fences(ex)
-                fn = filename or "index.js"
-                return fn, code, "javascript"
-
-        # No language-specific match — use first available example
         if examples:
             code = _strip_fences(examples[0])
-            lang = _detect_language(examples[0])
-            fn = filename or ("main.py" if lang == "python" else "index.js")
-            return fn, code, lang if lang != "unknown" else "python"
+            fn = filename or "main.py"
+            return fn, code, "python"
 
-    # Fallback: minimal placeholder
-    if want_js:
-        fn = filename or "index.js"
-        return fn, '// TODO: code example\nconsole.log("hello");', "javascript"
-
+    # Final fallback
     fn = filename or "main.py"
     return fn, '# TODO: code example\nprint("hello")', "python"
 
@@ -283,6 +430,7 @@ def _extract_terminal_content(shot: Shot, section: Section) -> tuple[str, str]:
 def _generate_terminal_output(command: str, section: Section) -> str:
     """Generate realistic terminal output for common commands."""
     cmd_lower = command.lower().strip()
+    section_lower = section.narration.lower() if section else ""
 
     if cmd_lower.startswith("pip install"):
         pkg = command.split("install", 1)[-1].strip() or "package"
@@ -292,17 +440,29 @@ def _generate_terminal_output(command: str, section: Section) -> str:
             f"Successfully installed {pkg}-1.0.0"
         )
 
-    if cmd_lower.startswith("npm install") or cmd_lower.startswith("npm i "):
+    if "titanic" in cmd_lower or "titanic" in section_lower:
+        if "model" in cmd_lower or "model" in section_lower or "predict" in section_lower:
+            return (
+                "Loading titanic.csv...\n"
+                "Training LogisticRegression...\n"
+                "Accuracy: 78.77%\n"
+                "\n"
+                "Sample predictions:\n"
+                "  Passenger 1 (3rd class, age 22): Did not survive\n"
+                "  Passenger 2 (1st class, age 38): Survived"
+            )
         return (
-            "added 42 packages in 3s\n\n2 packages are looking for funding\n"
-            "  run `npm fund` for details"
+            "   Survived  Pclass     Sex   Age  SibSp  Fare\n"
+            "0         0       3    male  22.0      1  7.25\n"
+            "1         1       1  female  38.0      1 71.28\n"
+            "2         1       3  female  26.0      0  7.92\n"
+            "\n"
+            "Shape: (891, 12)\n"
+            "Missing: Age 177, Cabin 687, Embarked 2"
         )
 
     if cmd_lower.startswith("python") or cmd_lower.startswith("py "):
         return "Output: OK"
-
-    if cmd_lower.startswith("node "):
-        return "Server running on http://localhost:3000"
 
     if "pytest" in cmd_lower or "test" in cmd_lower:
         return (
@@ -316,8 +476,7 @@ def _generate_terminal_output(command: str, section: Section) -> str:
     if cmd_lower.startswith("git "):
         return ""
 
-    # Generic fallback based on section context
-    return "✓ Done"
+    return "\u2713 Done"
 
 
 def _extract_extension_content(shot: Shot, script: TutorialScript) -> dict:
@@ -670,8 +829,40 @@ def _build_keyframes_for_shot(
         command, output = _extract_terminal_content(shot, section)
         chat_msgs = _extract_chat_content(shot, section)
 
-        # Default explorer files
-        project_files = ["README.md", filename, "requirements.txt", "tests/"]
+        # Context-aware explorer files (section-title driven)
+        title_lower = section.title.lower()
+        if any(kw in title_lower for kw in ("install", "extension", "opening")):
+            project_files = ["README.md", "requirements.txt"]
+        elif any(kw in title_lower for kw in ("plan", "implement", "model", "rpi")):
+            project_files = [
+                "titanic.csv",
+                "explore_titanic.py",
+                filename,
+                ".copilot-tracking/",
+                "  plans/",
+                "  changes/",
+            ]
+        elif any(kw in title_lower for kw in ("agent", "meet")):
+            project_files = ["README.md", filename, "requirements.txt"]
+        elif any(kw in title_lower for kw in ("research", "explore", "titanic")):
+            project_files = [
+                "titanic.csv",
+                filename,
+                ".copilot-tracking/",
+                "  research/",
+            ]
+        elif any(kw in title_lower for kw in ("workflow", "why", "accelerate", "review")):
+            project_files = [
+                "titanic.csv",
+                "explore_titanic.py",
+                "titanic_model.py",
+                ".copilot-tracking/",
+                "  research/",
+                "  plans/",
+                "  changes/",
+            ]
+        else:
+            project_files = ["README.md", filename, "requirements.txt"]
 
         # Common kwargs shared across all frames
         base_kwargs: dict = {

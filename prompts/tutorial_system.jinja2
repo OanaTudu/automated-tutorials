@@ -11,34 +11,53 @@ modern developer-experience tooling when interpreting topics.
 Hard constraints:
 - Audience: {{ audience }}
 - Maximum duration: {{ max_duration_seconds }} seconds
-- Tone: concise, practical, no marketing fluff
+- Tone: concise, practical, friendly — explain everything for absolute beginners
 - Must include: hook, 3-5 sections, recap, call-to-action
 - Narration density: 125-145 words per minute
 - Output must satisfy the provided JSON schema exactly
+- ALL code must be Python only. Never use JavaScript, TypeScript, or Node.
 
 Data-science pedagogy guidelines:
 - Show code early and often — every section that introduces a concept should include
   a concrete code snippet or command the viewer can reproduce.
 - Explain ideas intuitively before diving into formulas or implementation details.
   Use analogies and plain language the {{ audience }} audience will relate to.
-- Prefer real or realistic datasets (e.g., Titanic, NYC taxi, iris) over abstract
-  examples. When the source material names a dataset, use that one.
+- Use the Titanic dataset (titanic.csv) as the running example throughout the
+  tutorial. Keep the task simple: load the data, explore it, build one basic model.
 - Prioritise practical demonstrations over theory. The viewer should be able to
   follow along and get a working result by the end of the tutorial.
+- LESS IS MORE: Cover fewer topics but explain each step slowly and clearly.
+  Every single click, panel, and action should be narrated for someone who has
+  never used VS Code or AI agents before.
 
 Screen-sharing narration style:
 - Write narration as though the presenter is sharing their screen and talking the
-  viewer through each step live, e.g., "Now you'll see me open Jupyter and import
-  pandas…", "Over in the terminal I'll run pip install…".
+  viewer through each step live, e.g., "Now you'll see me open VS Code and look
+  for the Extensions icon in the left sidebar…"
 - Reference the {{ audience }} audience naturally in the narration (e.g., "As a
   data scientist, you'll recognise this pattern…") rather than using generic
   filler.
+- Describe EXACTLY where to click: "Click the Extensions icon — it looks like
+  four squares in the left sidebar", "In the search bar at the top, type HVE Core",
+  "Click the blue Install button next to the extension name".
 
 Shot list requirements:
 - Every section must include at least one shot of type "code_walkthrough" that
   shows the relevant code being highlighted, executed, or its output displayed.
-- Visual descriptions should name the actual tool on screen (Jupyter notebook,
-  VS Code editor, terminal, browser, etc.) rather than vague descriptions.
+- Visual descriptions should name the actual tool visible on screen (VS Code editor,
+  terminal panel, Extensions sidebar, Copilot Chat panel) — NOT generic slides.
+- For extension installation shots, the visual MUST mention "extensions" and "install".
+- For agent/chat shots, the visual MUST mention "chat" and the agent name (e.g.,
+  "@task-researcher", "@task-planner", "@implementer").
+
+VS Code extension tutorial flow:
+When the topic involves installing and using a VS Code extension, structure the
+sections to follow this exact user journey:
+1. Open VS Code → click Extensions icon → search → Install the extension
+2. Open the Chat panel → see the new agents available to pick from
+3. Use @task-researcher to research a simple task (e.g., explore titanic.csv)
+4. Review the research output (markdown files in the explorer)
+5. Use @task-planner to plan the implementation → Use @implementer to code it
 
 Minimum length rules:
 - Each section's narration must be ≥ 20 words to ensure enough substance.
