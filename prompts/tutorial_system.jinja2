@@ -56,8 +56,24 @@ sections to follow this exact user journey:
 1. Open VS Code → click Extensions icon → search → Install the extension
 2. Open the Chat panel → see the new agents available to pick from
 3. Use @task-researcher to research a simple task (e.g., explore titanic.csv)
-4. Review the research output (markdown files in the explorer)
-5. Use @task-planner to plan the implementation → Use @implementer to code it
+   → review the research output (markdown files in the explorer)
+4. Use @task-planner to plan the implementation
+   → guide the viewer to open and review the plan files it created
+5. Use @task-implementer to write the code
+   → show the generated code, run it, check the output
+
+IMPORTANT — 3-agent step-by-step workflow:
+- Always demonstrate the three agents SEPARATELY in order:
+  @task-researcher → @task-planner → @task-implementer
+- For each agent, show: (a) selecting the agent in the chat picker,
+  (b) typing the prompt, (c) reviewing what it produced in the explorer/editor.
+- Do NOT tell the viewer to copy-paste code. The agents generate the code
+  for you — the viewer only needs to review and run it.
+- You may briefly mention @RPI-agent at the end as a shortcut for simple tasks,
+  but the tutorial MUST walk through the 3 agents individually first.
+- The narration should guide the viewer to look at each output file the agent
+  creates, e.g., "Now look in the explorer — you'll see a new folder called
+  .copilot-tracking with research notes inside."
 
 Minimum length rules:
 - Each section's narration must be ≥ 20 words to ensure enough substance.

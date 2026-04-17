@@ -1127,12 +1127,26 @@ def _segment_duration_ms(manifest: TimingManifest, seg_id: str) -> int:
 
 
 def _distribute_duration(total_ms: int, count: int) -> list[int]:
-    """Evenly split *total_ms* across *count* keyframes, absorbing remainder in the last."""
+    """Split *total_ms* across *count* keyframes, front-weighted.
+
+    For 2-frame shots the first frame (the "before" / typing state) gets ~65%
+    so the visual holds while the narrator describes the action, and the second
+    frame (the "complete" result) gets the remaining ~35%.  For 3+ frames the
+    first frame still gets a larger share and the rest are equal.  For a single
+    frame the full duration is returned.
+    """
     if count <= 0:
         return []
-    base = total_ms // count
-    durations = [base] * count
-    durations[-1] += total_ms - base * count
+    if count == 1:
+        return [total_ms]
+    if count == 2:
+        first = int(total_ms * 0.65)
+        return [first, total_ms - first]
+    # 3+ frames: first frame 40%, rest split equally
+    first = int(total_ms * 0.40)
+    rest_each = (total_ms - first) // (count - 1)
+    durations = [first] + [rest_each] * (count - 1)
+    durations[-1] += total_ms - sum(durations)
     return durations
 
 
