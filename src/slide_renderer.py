@@ -142,26 +142,55 @@ def _wrap_html(body: str) -> str:
 
 
 def _highlight_code(code: str) -> str:
-    """Apply lightweight syntax coloring via inline ``<span>`` styles."""
-    escaped = _esc(code)
-    # Comments (# ...)
-    escaped = re.sub(
-        r"(#[^\n]*)",
-        r'<span style="color:#6a737d">\1</span>',
-        escaped,
+    """Apply lightweight syntax coloring via inline ``<span>`` styles.
+
+    Highlighting is applied on raw text using sentinel markers, *then*
+    the non-marker portions are HTML-escaped.  This avoids the previous
+    bug where ``#`` inside HTML entities (e.g. ``&#x27;``) was mistakenly
+    treated as a comment delimiter.
+    """
+    sentinel_s = "\x02"  # sentinel start
+    sentinel_e = "\x03"  # sentinel end
+
+    # 1. Apply regex highlighting on RAW code using sentinels
+    # Comments: # at start-of-line or after whitespace
+    code = re.sub(
+        r"((?:^|\s)#[^\n]*)",
+        sentinel_s + 'C' + sentinel_e + r"\1" + sentinel_s + '/' + sentinel_e,
+        code,
     )
-    # Strings (single/double quoted, non-greedy)
-    escaped = re.sub(
-        r'(&quot;.*?&quot;|&#x27;.*?&#x27;|".*?"|\'.*?\')',
-        r'<span style="color:#a5d6a7">\1</span>',
-        escaped,
+    # Strings (single/double, non-greedy)
+    code = re.sub(
+        r"""(".*?"|'.*?')""",
+        sentinel_s + 'S' + sentinel_e + r"\1" + sentinel_s + '/' + sentinel_e,
+        code,
     )
     # Keywords
-    escaped = re.sub(
+    code = re.sub(
         _PY_KEYWORDS,
-        r'<span style="color:#79b8ff">\1</span>',
-        escaped,
+        sentinel_s + 'K' + sentinel_e + r"\1" + sentinel_s + '/' + sentinel_e,
+        code,
     )
+    # JS keywords (function, const, let, var, export, default, import)
+    code = re.sub(
+        r"\b(function|const|let|var|export|default|import)\b",
+        sentinel_s + 'K' + sentinel_e + r"\1" + sentinel_s + '/' + sentinel_e,
+        code,
+    )
+
+    # 2. HTML-escape everything (sentinels survive because they are control chars)
+    escaped = _esc(code)
+
+    # 3. Replace sentinels with real HTML spans
+    span_map = {
+        'C': '<span style="color:#6a737d">',   # comments
+        'S': '<span style="color:#a5d6a7">',   # strings
+        'K': '<span style="color:#79b8ff">',    # keywords
+        '/': '</span>',
+    }
+    for tag, replacement in span_map.items():
+        escaped = escaped.replace(sentinel_s + tag + sentinel_e, replacement)
+
     return escaped
 
 
@@ -240,37 +269,86 @@ def _build_cta_slide(script: TutorialScript) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _strip_fences(snippet: str) -> str:
+    """Remove markdown fence markers (` ```lang ... ``` `) and return bare code."""
+    match = re.search(r"```(?:\w+)?\n(.*?)```", snippet, re.DOTALL)
+    return match.group(1).strip() if match else snippet.strip()
+
+
+def _detect_language(snippet: str) -> str:
+    """Best-effort language detection from a fenced code block."""
+    m = re.match(r"```(\w+)", snippet)
+    if m:
+        return m.group(1).lower()
+    # Heuristic fallback
+    if "def " in snippet or "import " in snippet and "from " in snippet:
+        return "python"
+    if "function " in snippet or "const " in snippet or "=>" in snippet:
+        return "javascript"
+    return "unknown"
+
+
 def _distribute_code_examples(
     script: TutorialScript,
     research_data: dict | None,
 ) -> dict[int, str]:
-    """Map section indices to code snippets from *research_data*."""
-    code_examples: list[str] = []
+    """Map section indices to code snippets from *research_data*.
+
+    Matches by language hint: sections mentioning "Python" get Python
+    examples, sections mentioning "React"/"JavaScript" get JS examples.
+    """
+    raw_examples: list[str] = []
     if research_data:
-        code_examples = list(research_data.get("code_examples", []))
+        raw_examples = list(research_data.get("code_examples", []))
+
+    if not raw_examples:
+        return {}
+
+    # Classify examples by language
+    tagged: list[tuple[str, str]] = [
+        (_detect_language(ex), _strip_fences(ex)) for ex in raw_examples
+    ]
 
     mapping: dict[int, str] = {}
-    if not code_examples:
-        return mapping
+    used: set[int] = set()
 
-    example_iter = iter(code_examples)
+    # First pass: match by language affinity
     for idx, section in enumerate(script.sections):
-        # Heuristic: assign a code example to sections whose narration hints at code
+        narration_lower = section.narration.lower()
+        want_py = any(kw in narration_lower for kw in ("python", "flask", "django", "pip"))
+        want_js = any(
+            kw in narration_lower
+            for kw in ("javascript", "react", "hook system", "usestate", "node")
+        )
+
+        for ex_idx, (lang, code) in enumerate(tagged):
+            if ex_idx in used:
+                continue
+            if want_py and lang == "python":
+                mapping[idx] = code
+                used.add(ex_idx)
+                break
+            if want_js and lang in ("javascript", "js", "jsx", "typescript"):
+                mapping[idx] = code
+                used.add(ex_idx)
+                break
+
+    # Second pass: distribute remaining examples to code-hinting sections
+    for idx, section in enumerate(script.sections):
+        if idx in mapping:
+            continue
         narration_lower = section.narration.lower()
         has_code_hint = any(
             kw in narration_lower
             for kw in ("code", "example", "snippet", "import", "function", "class", "def ")
         )
         if has_code_hint:
-            snippet = next(example_iter, None)
-            if snippet is not None:
-                mapping[idx] = snippet
-    # Distribute remaining examples to sections that didn't get one yet
-    for idx in range(len(script.sections)):
-        if idx not in mapping:
-            snippet = next(example_iter, None)
-            if snippet is not None:
-                mapping[idx] = snippet
+            for ex_idx, (_, code) in enumerate(tagged):
+                if ex_idx not in used:
+                    mapping[idx] = code
+                    used.add(ex_idx)
+                    break
+
     return mapping
 
 
