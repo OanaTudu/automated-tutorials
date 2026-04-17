@@ -148,10 +148,18 @@ def make_tutorial(
             srt_path=srt_path,
         )
 
-        # Video validation
+        # Video validation — use actual TTS duration (from manifest) rather than
+        # the script's target, since TTS speed varies from the LLM's estimate.
+        manifest_path = run_dir / "02_voice" / "timing_manifest.json"
+        actual_target_sec = script.total_target_seconds
+        if manifest_path.exists():
+            import json as _json
+            _manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
+            actual_target_sec = _manifest.get("total_duration_ms", 0) / 1000.0
+
         video_errors = validate_video(
             Path(edit_result.output_path),
-            script.total_target_seconds,
+            actual_target_sec,
             config,
         )
         if video_errors:
