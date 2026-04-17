@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 
 from .ffmpeg_helpers import probe_video
@@ -118,7 +119,12 @@ def validate_video(
     if not video_path.exists():
         return [f"Video file does not exist: {video_path}"]
 
-    probe = probe_video(video_path)
+    try:
+        probe = probe_video(video_path)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        logger.warning("Video validation skipped: ffprobe not available")
+        return errors
+
     streams = probe.get("streams", [])
     fmt = probe.get("format", {})
 

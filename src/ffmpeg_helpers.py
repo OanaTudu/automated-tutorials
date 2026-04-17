@@ -12,24 +12,37 @@ logger = logging.getLogger(__name__)
 
 def probe_video(path: Path) -> dict:
     """Return ffprobe JSON metadata for a media file."""
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v", "quiet",
-            "-print_format", "json",
-            "-show_format",
-            "-show_streams",
-            str(path),
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+                "-show_streams",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            "ffprobe not found on PATH. Install ffmpeg: winget install ffmpeg"
+        ) from None
     return json.loads(result.stdout)
 
 
 def probe_audio_duration_ms(path: Path) -> int:
-    """Return audio duration in milliseconds."""
+    """Return audio duration in milliseconds.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ffprobe is not installed or not on PATH.
+    ValueError
+        If no duration can be determined from the media file.
+    """
     data = probe_video(path)
     for stream in data.get("streams", []):
         if stream.get("codec_type") == "audio":

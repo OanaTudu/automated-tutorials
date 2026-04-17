@@ -8,7 +8,14 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from src.models import CritiqueResult, ResearchResult, StageResult, TutorialScript
+from src.models import (
+    CritiqueResult,
+    CritiqueScores,
+    ResearchResult,
+    StageResult,
+    TutorialScript,
+)
+from src.preflight import PreflightResult
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -59,6 +66,7 @@ def _setup_research_mock(mock_research, tmp_path: Path) -> None:
 # ── Full pipeline success ────────────────────────────────────────────────
 
 
+@patch("src.make_tutorial.run_preflight", return_value=PreflightResult())
 @patch("src.make_tutorial.critique_tutorial")
 @patch("src.make_tutorial.generate_captions")
 @patch("src.make_tutorial.compose_video")
@@ -78,6 +86,7 @@ def test_make_tutorial_chains_all_stages(
     mock_compose,
     mock_captions,
     mock_critique,
+    _mock_preflight,
     tmp_path,
     pipeline_config,
 ):
@@ -130,7 +139,10 @@ def test_make_tutorial_chains_all_stages(
     # Critique
     critique_path = tmp_path / "critique.json"
     critique_data = CritiqueResult(
-        scores={"accuracy": 8.0, "completeness": 8.0, "pacing": 7.5},
+        scores=CritiqueScores(
+            accuracy=8.0, completeness=8.0, pacing=7.5,
+            audience_fit=8.0, teaching_effectiveness=8.0,
+        ),
         overall_grade=8.0,
         strengths=["Good coverage"],
         improvements=[],
@@ -162,11 +174,13 @@ def test_make_tutorial_chains_all_stages(
 # ── Quality gate failure ─────────────────────────────────────────────────
 
 
+@patch("src.make_tutorial.run_preflight", return_value=PreflightResult())
 @patch("src.make_tutorial.validate_script")
 @patch("src.make_tutorial.generate_script")
 @patch("src.make_tutorial.research_topic")
 def test_make_tutorial_raises_on_quality_gate_failure(
-    mock_research, mock_gen_script, mock_validate, tmp_path, pipeline_config
+    mock_research, mock_gen_script, mock_validate, _mock_preflight,
+    tmp_path, pipeline_config,
 ):
     from src.make_tutorial import make_tutorial
 
@@ -192,6 +206,7 @@ def test_make_tutorial_raises_on_quality_gate_failure(
 # ── Output directory structure ───────────────────────────────────────────
 
 
+@patch("src.make_tutorial.run_preflight", return_value=PreflightResult())
 @patch("src.make_tutorial.critique_tutorial")
 @patch("src.make_tutorial.generate_captions")
 @patch("src.make_tutorial.compose_video")
@@ -211,6 +226,7 @@ def test_make_tutorial_creates_dated_slug_directory(
     mock_compose,
     mock_captions,
     mock_critique,
+    _mock_preflight,
     tmp_path,
     pipeline_config,
 ):
@@ -246,7 +262,10 @@ def test_make_tutorial_creates_dated_slug_directory(
 
     critique_path = tmp_path / "critique.json"
     critique_data = CritiqueResult(
-        scores={"accuracy": 8.0, "completeness": 8.0, "pacing": 7.5},
+        scores=CritiqueScores(
+            accuracy=8.0, completeness=8.0, pacing=7.5,
+            audience_fit=8.0, teaching_effectiveness=8.0,
+        ),
         overall_grade=8.0,
         strengths=["Good coverage"],
         improvements=[],
@@ -266,6 +285,7 @@ def test_make_tutorial_creates_dated_slug_directory(
 # ── Skips captions when engine not configured ────────────────────────────
 
 
+@patch("src.make_tutorial.run_preflight", return_value=PreflightResult())
 @patch("src.make_tutorial.critique_tutorial")
 @patch("src.make_tutorial.generate_captions")
 @patch("src.make_tutorial.compose_video")
@@ -285,6 +305,7 @@ def test_make_tutorial_skips_captions_when_no_engine(
     mock_compose,
     mock_captions,
     mock_critique,
+    _mock_preflight,
     tmp_path,
     pipeline_config,
 ):
@@ -321,7 +342,10 @@ def test_make_tutorial_skips_captions_when_no_engine(
 
     critique_path = tmp_path / "critique.json"
     critique_data = CritiqueResult(
-        scores={"accuracy": 8.0, "completeness": 8.0, "pacing": 7.5},
+        scores=CritiqueScores(
+            accuracy=8.0, completeness=8.0, pacing=7.5,
+            audience_fit=8.0, teaching_effectiveness=8.0,
+        ),
         overall_grade=8.0,
         strengths=["Good coverage"],
         improvements=[],

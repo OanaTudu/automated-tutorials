@@ -63,16 +63,22 @@ class ResearchResult(BaseModel):
     raw_notes: str = Field(default="", description="Unstructured research notes from the LLM")
 
 
+class CritiqueScores(BaseModel):
+    """Individual category scores for tutorial critique (1-10 each)."""
+
+    accuracy: float = Field(ge=1, le=10, description="Are facts consistent with research?")
+    completeness: float = Field(ge=1, le=10, description="Does it cover key findings?")
+    pacing: float = Field(ge=1, le=10, description="Is narration density appropriate?")
+    audience_fit: float = Field(ge=1, le=10, description="Is content right for audience?")
+    teaching_effectiveness: float = Field(
+        ge=1, le=10, description="Good pedagogy (hook, examples, recap)?",
+    )
+
+
 class CritiqueResult(BaseModel):
     """Self-critique output evaluating the generated tutorial."""
 
-    scores: dict[str, float] = Field(
-        default_factory=dict,
-        description=(
-            "Category scores (1-10): accuracy, completeness, "
-            "pacing, audience_fit, teaching_effectiveness"
-        ),
-    )
+    scores: CritiqueScores
     overall_grade: float = Field(ge=1, le=10, description="Weighted overall score")
     strengths: list[str] = Field(default_factory=list)
     improvements: list[str] = Field(default_factory=list)

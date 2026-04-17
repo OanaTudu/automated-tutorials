@@ -10,6 +10,7 @@ import yaml
 
 from .captions import generate_captions
 from .models import CritiqueResult, ResearchResult, TutorialScript
+from .preflight import run_preflight
 from .quality_gates import validate_script, validate_video
 from .stage_critique import critique_tutorial
 from .stage_edit import compose_video
@@ -72,7 +73,15 @@ def make_tutorial(
 
     config["audience"] = audience
 
-    output_root = Path(config["pipeline"]["output_root"])
+    # Pre-flight environment validation
+    preflight = run_preflight(config)
+    if preflight.errors:
+        raise RuntimeError(f"Preflight failed: {preflight.errors}")
+    if preflight.warnings:
+        for warning in preflight.warnings:
+            logger.warning("Preflight: %s", warning)
+
+    output_root= Path(config["pipeline"]["output_root"])
     slug = topic.lower().replace(" ", "-")
     run_dir = output_root / f"{date.today().isoformat()}-{slug}"
 
@@ -161,7 +170,10 @@ def make_tutorial(
         )
 
         # Check if critique passes
-        scores_pass = all(v >= min_category for v in critique_result.scores.values())
+        scores_pass = all(
+            v >= min_category
+            for v in critique_result.scores.model_dump().values()
+        )
         if critique_result.overall_grade >= min_grade and scores_pass:
             logger.info("Critique passed: grade=%.1f", critique_result.overall_grade)
             break

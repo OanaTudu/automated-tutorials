@@ -4,7 +4,7 @@ pipeline:
   log_level: INFO
 
 research:
-  provider: azure_openai    # same as script provider
+  provider: openai
   model: gpt-4.1
   max_output_tokens: 3000
   max_sources: 10
@@ -14,16 +14,14 @@ research:
     cache_dir: outputs/.research_cache
 
 script:
-  provider: azure_openai    # openai | azure_openai
-  model: gpt-4.1              # Azure OpenAI deployment name
+  provider: openai
+  model: gpt-4.1
   max_output_tokens: 2200
   temperature: 0.4
   schema_enforced: true
-  azure_openai:
-    api_version: "2025-04-01-preview"
 
 tts:
-  primary: azure_speech
+  primary: openai_tts
   fallback: openai_tts
   azure:
     voice: en-US-AvaMultilingualNeural
@@ -33,8 +31,8 @@ tts:
     output_format: riff-24khz-16bit-mono-pcm
   openai:
     model: gpt-4o-mini-tts
-    voice: marin
-    instructions: "Speak in a clear tutorial tone, medium pace, warm and confident."
+    voice: coral
+    instructions: "Speak in a clear tutorial tone, medium pace, warm and confident. You are narrating a data science tutorial with screen sharing."
     response_format: wav
 
 recording:

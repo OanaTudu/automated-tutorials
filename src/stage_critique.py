@@ -6,7 +6,13 @@ import json
 import logging
 from pathlib import Path
 
-from .models import CritiqueResult, ResearchResult, StageResult, TutorialScript
+from .models import (
+    CritiqueResult,
+    CritiqueScores,
+    ResearchResult,
+    StageResult,
+    TutorialScript,
+)
 from .stage_script import _create_client
 
 logger = logging.getLogger(__name__)
@@ -66,13 +72,13 @@ Return ONLY the JSON object matching the schema."""
 def _default_critique(reason: str) -> CritiqueResult:
     """Return a safe default critique when the LLM call fails."""
     return CritiqueResult(
-        scores={
-            "accuracy": 5.0,
-            "completeness": 5.0,
-            "pacing": 5.0,
-            "audience_fit": 5.0,
-            "teaching_effectiveness": 5.0,
-        },
+        scores=CritiqueScores(
+            accuracy=5.0,
+            completeness=5.0,
+            pacing=5.0,
+            audience_fit=5.0,
+            teaching_effectiveness=5.0,
+        ),
         overall_grade=5.0,
         strengths=[],
         improvements=[],

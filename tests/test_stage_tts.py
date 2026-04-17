@@ -104,6 +104,18 @@ def test_synthesize_voice_falls_back(mock_dispatch, sample_script, tmp_path, pip
     assert fallback_call.args[0] == "openai_tts"
 
 
+@patch("src.stage_tts._dispatch")
+def test_synthesize_voice_both_fail(mock_dispatch, sample_script, tmp_path, pipeline_config):
+    """When both providers fail, a RuntimeError lists both errors."""
+    mock_dispatch.side_effect = [
+        RuntimeError("Azure unavailable"),
+        RuntimeError("OpenAI key missing"),
+    ]
+
+    with pytest.raises(RuntimeError, match="All TTS providers failed"):
+        synthesize_voice(sample_script, tmp_path, pipeline_config)
+
+
 # ── Azure synthesizer ───────────────────────────────────────────────────
 
 speechsdk = pytest.importorskip(
@@ -144,6 +156,25 @@ def test_azure_synthesizer_calls_sdk(
 # ── OpenAI synthesizer ──────────────────────────────────────────────────
 
 
+def test_openai_missing_api_key(sample_script, tmp_path, tts_config):
+    """_synthesize_openai raises RuntimeError when OPENAI_API_KEY is unset."""
+    from src.stage_tts import _synthesize_openai
+
+    with patch.dict("os.environ", {}, clear=True):
+        with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+            _synthesize_openai(sample_script, tmp_path, tts_config["openai"])
+
+
+def test_azure_missing_region(sample_script, tmp_path, tts_config):
+    """_synthesize_azure raises RuntimeError when AZURE_SPEECH_REGION is unset."""
+    from src.stage_tts import _synthesize_azure
+
+    with patch.dict("os.environ", {}, clear=True):
+        with pytest.raises(RuntimeError, match="AZURE_SPEECH_REGION"):
+            _synthesize_azure(sample_script, tmp_path, tts_config["azure"])
+
+
+@patch.dict("os.environ", {"OPENAI_API_KEY": "fake-key"})
 @patch("openai.OpenAI")
 def test_openai_synthesizer_streams_to_file(mock_openai_cls, sample_script, tmp_path, tts_config):
     from src.stage_tts import _synthesize_openai

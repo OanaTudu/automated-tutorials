@@ -105,7 +105,10 @@ def generate_script(
 
             # Run quality-gate validation before accepting the script
             max_seconds = config["pipeline"]["max_duration_seconds"]
-            errors = validate_script(parsed, max_seconds=max_seconds)
+            audience = config.get("audience", "")
+            errors = validate_script(
+                parsed, max_seconds=max_seconds, audience=audience,
+            )
             if errors:
                 last_error = "; ".join(errors)
                 logger.warning(

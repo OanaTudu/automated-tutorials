@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.models import CritiqueResult, ResearchResult
+from src.models import CritiqueResult, CritiqueScores, ResearchResult
 from src.stage_critique import _build_critique_prompt, _default_critique, critique_tutorial
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -22,13 +22,13 @@ def _sample_research() -> ResearchResult:
 
 def _mock_critique() -> CritiqueResult:
     return CritiqueResult(
-        scores={
-            "accuracy": 8,
-            "completeness": 7,
-            "pacing": 8,
-            "audience_fit": 9,
-            "teaching_effectiveness": 8,
-        },
+        scores=CritiqueScores(
+            accuracy=8,
+            completeness=7,
+            pacing=8,
+            audience_fit=9,
+            teaching_effectiveness=8,
+        ),
         overall_grade=8.0,
         strengths=["Good hook"],
         improvements=["Add more examples"],
@@ -59,7 +59,7 @@ def test_critique_tutorial_openai_success(mock_create, sample_script, tmp_path, 
     # Verify persisted critique.json is valid
     critique = CritiqueResult.model_validate_json(Path(result.output_path).read_text())
     assert critique.overall_grade == 8.0
-    assert "accuracy" in critique.scores
+    assert "accuracy" in critique.scores.model_dump()
 
 
 # ── Graceful failure ─────────────────────────────────────────────────────
@@ -121,8 +121,8 @@ def test_default_critique_has_expected_scores():
 
     assert critique.overall_grade == 5.0
     expected_keys = {"accuracy", "completeness", "pacing", "audience_fit", "teaching_effectiveness"}
-    assert set(critique.scores.keys()) == expected_keys
-    assert all(v == 5.0 for v in critique.scores.values())
+    assert set(critique.scores.model_dump().keys()) == expected_keys
+    assert all(v == 5.0 for v in critique.scores.model_dump().values())
     assert critique.strengths == []
     assert critique.improvements == []
     assert "test reason" in critique.summary

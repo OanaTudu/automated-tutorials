@@ -81,7 +81,7 @@ def pipeline_config() -> dict:
             "output_root": "outputs",
             "log_level": "INFO",
         },
-        "audience": "beginner developers",
+        "audience": "data scientists",
         "source_material": "",
         "script": {
             "provider": "openai",

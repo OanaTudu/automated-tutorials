@@ -25,9 +25,16 @@ def synthesize_voice(script: TutorialScript, output_dir: Path, config: dict) -> 
 
     try:
         output_path, manifest = _dispatch(primary, script, output_dir, tts_cfg)
-    except Exception:
+    except Exception as primary_err:
         logger.warning("Primary TTS (%s) failed, falling back to %s", primary, fallback)
-        output_path, manifest = _dispatch(fallback, script, output_dir, tts_cfg)
+        try:
+            output_path, manifest = _dispatch(fallback, script, output_dir, tts_cfg)
+        except Exception as fallback_err:
+            raise RuntimeError(
+                f"All TTS providers failed.\n"
+                f"  Primary ({primary}): {primary_err}\n"
+                f"  Fallback ({fallback}): {fallback_err}"
+            ) from fallback_err
 
     manifest_path = output_dir / "timing_manifest.json"
     manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
@@ -59,9 +66,17 @@ def _synthesize_azure(
     """Synthesize narration via Azure AI Speech SDK with SSML."""
     import os
 
-    import azure.cognitiveservices.speech as speechsdk
+    try:
+        import azure.cognitiveservices.speech as speechsdk
+    except ImportError as exc:
+        raise RuntimeError(
+            "Azure Speech SDK not installed. "
+            "Run: pip install azure-cognitiveservices-speech"
+        ) from exc
 
-    region = os.environ["AZURE_SPEECH_REGION"]
+    region = os.environ.get("AZURE_SPEECH_REGION")
+    if not region:
+        raise RuntimeError("Azure Speech requires AZURE_SPEECH_REGION env var")
     speech_key = os.environ.get("AZURE_SPEECH_KEY")
 
     if speech_key:
@@ -151,7 +166,14 @@ def _synthesize_openai(
     pacing control.  Falls back to single-blob synthesis if ffmpeg is
     unavailable or concatenation fails.
     """
+    import os
     import subprocess
+
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError(
+            "OpenAI TTS requires OPENAI_API_KEY env var. "
+            "Set it or configure Azure Speech as primary."
+        )
 
     from openai import OpenAI
 
