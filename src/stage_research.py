@@ -106,7 +106,15 @@ def _research_openai(
     resp = client.responses.create(
         model=research_cfg["model"],
         instructions=system_prompt,
-        input=[{"role": "user", "content": f"Research the following topic thoroughly: {topic}"}],
+        input=[{"role": "user", "content": (
+            f"Research the following topic thoroughly: {topic}\n\n"
+            "IMPORTANT: If this topic is about a VS Code extension, focus on:\n"
+            "- How to install it (Extensions sidebar → search → click Install)\n"
+            "- No API keys or credentials are needed — just install and use\n"
+            "- What agents/features it provides\n"
+            "- Step-by-step workflow in VS Code (chat panel, terminal, editor)\n"
+            "- Show the full VS Code IDE with explorer, editor, terminal, and chat panels"
+        )}],
         tools=[{"type": "web_search_preview"}],
         max_output_tokens=research_cfg["max_output_tokens"],
     )

@@ -654,22 +654,207 @@ def _build_keyframes_for_shot(
     research_data: dict | None,
     script: TutorialScript,
 ) -> list[Keyframe]:
-    """Generate 2-4 keyframes for a single shot."""
+    """Generate 2-4 keyframes using the unified IDE layout.
+
+    Every keyframe shows the full VS Code IDE (editor + terminal + chat +
+    sidebar) with the *focus* panel highlighted and its content matching
+    the shot description.
+    """
+    from .vscode_scenes import full_ide_scene
+
     try:
-        if scene_type == SceneType.EDITOR:
-            return _build_editor_keyframes(shot, section, research_data)
-        if scene_type == SceneType.TERMINAL:
-            return _build_terminal_keyframes(shot, section)
+        label = shot.on_screen_text or None
+
+        # --- Determine content for each panel based on scene type ----------
+        filename, code, language = _extract_code_for_shot(shot, section, research_data)
+        command, output = _extract_terminal_content(shot, section)
+        chat_msgs = _extract_chat_content(shot, section)
+
+        # Default explorer files
+        project_files = ["README.md", filename, "requirements.txt", "tests/"]
+
+        # Common kwargs shared across all frames
+        base_kwargs: dict = {
+            "editor_filename": filename,
+            "editor_language": language,
+            "explorer_files": project_files,
+            "on_screen_label": label,
+        }
+
+        frames: list[Keyframe] = []
+
         if scene_type == SceneType.EXTENSIONS:
-            return _build_extensions_keyframes(shot, script)
-        if scene_type == SceneType.CHAT:
-            return _build_chat_keyframes(shot, section)
-        if scene_type == SceneType.BROWSER:
-            return _build_browser_keyframes(shot)
+            ext = _extract_extension_content(shot, script)
+            # Frame 1: open extensions sidebar, search
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="extensions",
+                    sidebar_mode="extensions",
+                    ext_search_query=ext["search_query"],
+                    extensions_list=ext["extensions"],
+                    ext_install_state="install",
+                    editor_code=code,
+                    terminal_lines=f"$ # Ready to install {ext['search_query']}",
+                    chat_messages=[],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=0,
+            ))
+            # Frame 2: extension installed
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="extensions",
+                    sidebar_mode="extensions",
+                    ext_search_query=ext["search_query"],
+                    extensions_list=ext["extensions"],
+                    ext_install_state="installed",
+                    editor_code=code,
+                    terminal_lines=f"Extension '{ext['search_query']}' is now active.",
+                    chat_messages=[{"role": "assistant", "content": f"✓ {ext['search_query']} extension is ready!"}],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=1,
+            ))
+
+        elif scene_type == SceneType.CHAT:
+            # Frame 1: user types message in chat
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="chat",
+                    editor_code=code,
+                    terminal_lines="$ ",
+                    chat_messages=chat_msgs[:1],
+                    chat_input=chat_msgs[0]["content"] if chat_msgs else "",
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=0,
+            ))
+            # Frame 2: assistant responds
+            full_msgs = chat_msgs if len(chat_msgs) > 1 else chat_msgs + [
+                {"role": "assistant", "content": f"Here's how to approach {section.title.lower()}..."}
+            ]
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="chat",
+                    editor_code=code,
+                    terminal_lines="$ ",
+                    chat_messages=full_msgs,
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=1,
+            ))
+
+        elif scene_type == SceneType.TERMINAL:
+            # Frame 1: command typed
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="terminal",
+                    editor_code=code,
+                    terminal_lines=f"$ {command}",
+                    chat_messages=[],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=0,
+            ))
+            # Frame 2: command output
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="terminal",
+                    editor_code=code,
+                    terminal_lines=f"$ {command}\n{output}",
+                    chat_messages=[],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=1,
+            ))
+
+        elif scene_type == SceneType.EDITOR:
+            code_lines = code.splitlines()
+            total_lines = len(code_lines)
+            # Frame 1: partial code (typing)
+            if total_lines > 3:
+                partial = "\n".join(code_lines[: total_lines // 2])
+                frames.append(Keyframe(
+                    html=full_ide_scene(
+                        focus="editor",
+                        editor_code=partial,
+                        editor_cursor_line=total_lines // 2,
+                        terminal_lines="$ ",
+                        chat_messages=[],
+                        **base_kwargs,
+                    ),
+                    duration_ms=0, shot_id=shot.id, frame_index=0,
+                ))
+            # Frame 2: full code with highlights
+            hl_start = max(1, total_lines - 2)
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="editor",
+                    editor_code=code,
+                    editor_highlighted_lines=list(range(hl_start, total_lines + 1)),
+                    terminal_lines="$ ",
+                    chat_messages=[],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=len(frames),
+            ))
+            # Frame 3: if action mentions run/output, show terminal with result
+            action_lower = shot.action.lower()
+            if any(kw in action_lower for kw in ("run", "execute", "terminal", "output")):
+                frames.append(Keyframe(
+                    html=full_ide_scene(
+                        focus="terminal",
+                        editor_code=code,
+                        editor_highlighted_lines=list(range(hl_start, total_lines + 1)),
+                        terminal_lines=f"$ {command}\n{output}",
+                        chat_messages=[],
+                        **base_kwargs,
+                    ),
+                    duration_ms=0, shot_id=shot.id, frame_index=len(frames),
+                ))
+
+        elif scene_type == SceneType.BROWSER:
+            url, title, content_html = _extract_browser_content(shot)
+            # For browser scenes, show a chat message pointing to the URL
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="editor",
+                    editor_code=f"# Open: {url}\n# {title}\n\n{code}",
+                    terminal_lines=f"$ # Navigate to {url}",
+                    chat_messages=[{"role": "assistant", "content": f"Opening {url}..."}],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=0,
+            ))
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="editor",
+                    editor_code=f"# {title}\n# {url}\n\n{code}",
+                    terminal_lines=f"$ # {title} loaded successfully",
+                    chat_messages=[{"role": "assistant", "content": f"✓ {title} is ready."}],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=1,
+            ))
+
+        if not frames:
+            # Fallback: show IDE with section info in editor
+            frames.append(Keyframe(
+                html=full_ide_scene(
+                    focus="editor",
+                    editor_code=f"# {section.title}\n# " + "\n# ".join(section.key_points),
+                    terminal_lines="$ ",
+                    chat_messages=[],
+                    **base_kwargs,
+                ),
+                duration_ms=0, shot_id=shot.id, frame_index=0,
+            ))
+
+        return frames
+
     except Exception:
         logger.warning(
-            "Failed to build %s keyframes for shot %s — falling back to slide",
-            scene_type.value,
+            "Failed to build unified IDE keyframes for shot %s — falling back",
             shot.id,
             exc_info=True,
         )

@@ -978,3 +978,329 @@ def browser_scene(
         f"{_on_screen_label_html(on_screen_label)}"
     )
     return _wrap_page(body, extra_css)
+
+
+# ---------------------------------------------------------------------------
+# Scene 6 – Full IDE layout (all panels visible simultaneously)
+# ---------------------------------------------------------------------------
+def full_ide_scene(
+    *,
+    focus: str = "editor",
+    editor_filename: str = "main.py",
+    editor_code: str = "",
+    editor_language: str = "python",
+    editor_highlighted_lines: list[int] | None = None,
+    editor_cursor_line: int | None = None,
+    terminal_lines: str = "",
+    chat_messages: list[dict[str, str]] | None = None,
+    chat_input: str = "",
+    explorer_files: list[str] | None = None,
+    sidebar_mode: str = "explorer",
+    extensions_list: list[dict[str, str]] | None = None,
+    ext_search_query: str = "",
+    ext_install_state: str = "not_installed",
+    on_screen_label: str | None = None,
+) -> str:
+    """Return an HTML page showing a complete VS Code IDE with all panels.
+
+    Layout::
+
+        ┌────────┬──────────┬──────────────────────┬─────────────┐
+        │Activity│ Sidebar  │  Editor (tabs+code)   │  Chat Panel │
+        │  Bar   │(Explorer │                       │  (320px)    │
+        │ (48px) │ 220px)   │  ┌──────────────────┐ │             │
+        │        │          │  │ Terminal (180px)  │ │             │
+        │        │          │  └──────────────────┘ │             │
+        ├────────┴──────────┴──────────────────────┴─────────────┤
+        │ Status Bar                                              │
+        └────────────────────────────────────────────────────────┘
+
+    The *focus* parameter highlights one panel with a blue border.
+    """
+    hl_set = set(editor_highlighted_lines or [])
+    files = explorer_files or [editor_filename]
+    msgs = chat_messages or []
+
+    _FOCUS_BORDER = "#007acc"
+    extra_css = f"""
+    .ide-row {{ display: flex; flex: 1; min-height: 0; }}
+
+    /* Sidebar */
+    .ide-sidebar {{
+        width: 220px; background: {_BG_SIDEBAR}; flex-shrink: 0;
+        display: flex; flex-direction: column; font-size: 13px;
+        overflow: hidden; border-right: 1px solid #333;
+    }}
+    .ide-sidebar.focused {{ border-right: 2px solid {_FOCUS_BORDER}; }}
+    .ide-sidebar-header {{
+        padding: 10px 12px; text-transform: uppercase; font-size: 11px;
+        font-weight: 600; letter-spacing: 0.5px; color: {_FG_DIM};
+    }}
+    .ide-sidebar-file {{
+        padding: 3px 12px 3px 24px; cursor: default;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }}
+    .ide-sidebar-file.active {{ background: rgba(255,255,255,0.08); }}
+    .ide-sidebar-file:hover {{ background: rgba(255,255,255,0.05); }}
+
+    /* Extensions sidebar variant */
+    .ide-ext-search {{
+        margin: 6px 8px; padding: 4px 8px; background: {_BG_INPUT};
+        border: 1px solid #555; color: {_FG_DEFAULT}; font-size: 12px;
+        font-family: {_FONT_UI}; border-radius: 2px;
+    }}
+    .ide-ext-item {{
+        padding: 6px 10px; display: flex; gap: 8px;
+        cursor: default; border-bottom: 1px solid #333;
+    }}
+    .ide-ext-item:hover {{ background: rgba(255,255,255,0.05); }}
+    .ide-ext-icon {{ font-size: 20px; flex-shrink: 0; width: 24px; text-align: center; }}
+    .ide-ext-info {{ min-width: 0; }}
+    .ide-ext-name {{ font-weight: 600; font-size: 12px; }}
+    .ide-ext-pub {{ font-size: 10px; color: {_FG_DIM}; margin-top: 1px; }}
+    .ide-ext-btn {{
+        display: inline-block; padding: 2px 8px; border-radius: 2px;
+        font-size: 10px; font-weight: 600; cursor: default; margin-top: 3px;
+    }}
+    .ide-ext-btn.install {{ background: #0e639c; color: #fff; }}
+    .ide-ext-btn.installing {{ background: #0e639c; color: #fff; opacity: 0.7; }}
+    .ide-ext-btn.installed {{ background: #388a34; color: #fff; }}
+
+    /* Center column */
+    .ide-center {{
+        flex: 1; display: flex; flex-direction: column; min-width: 0;
+    }}
+    .ide-editor-area {{
+        flex: 1; display: flex; flex-direction: column; min-height: 0;
+    }}
+    .ide-editor-area.focused {{ outline: 2px solid {_FOCUS_BORDER}; outline-offset: -2px; }}
+    .ide-editor-content {{
+        flex: 1; display: flex; overflow: hidden; position: relative;
+    }}
+    .ide-line-numbers {{
+        padding: 4px 10px 4px 14px; text-align: right;
+        color: {_FG_LINENO}; font-family: {_FONT_CODE}; font-size: 13px;
+        line-height: 19px; user-select: none; flex-shrink: 0; white-space: pre;
+    }}
+    .ide-code-area {{
+        flex: 1; padding: 4px 0 4px 8px; font-family: {_FONT_CODE};
+        font-size: 13px; line-height: 19px; overflow: hidden;
+        white-space: pre; min-width: 0;
+    }}
+    .ide-code-line {{ height: 19px; padding-right: 12px; }}
+    .ide-code-line.highlighted {{ background: {_HIGHLIGHT_BG}; }}
+    .ide-minimap {{
+        width: 50px; flex-shrink: 0;
+        background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+    }}
+
+    /* Terminal panel */
+    .ide-terminal {{
+        height: 180px; background: {_BG_TERMINAL}; flex-shrink: 0;
+        border-top: 1px solid #333; display: flex; flex-direction: column;
+    }}
+    .ide-terminal.focused {{ border-top: 2px solid {_FOCUS_BORDER}; }}
+    .ide-terminal-header {{
+        height: 28px; padding: 0 12px; display: flex; align-items: center;
+        font-size: 10px; text-transform: uppercase; color: {_FG_DIM};
+        border-bottom: 1px solid #333; letter-spacing: 0.5px; gap: 16px;
+    }}
+    .ide-terminal-tab {{ padding: 2px 8px; cursor: default; }}
+    .ide-terminal-tab.active {{
+        color: {_FG_DEFAULT}; border-bottom: 1px solid {_FG_DEFAULT};
+    }}
+    .ide-terminal-body {{
+        flex: 1; padding: 6px 14px; font-family: {_FONT_CODE};
+        font-size: 12px; line-height: 17px; overflow: hidden;
+        white-space: pre; color: {_FG_DEFAULT};
+    }}
+
+    /* Chat panel */
+    .ide-chat {{
+        width: 320px; flex-shrink: 0; display: flex; flex-direction: column;
+        background: {_BG_EDITOR}; border-left: 1px solid #333;
+    }}
+    .ide-chat.focused {{ border-left: 2px solid {_FOCUS_BORDER}; }}
+    .ide-chat-header {{
+        height: 35px; padding: 0 12px; display: flex; align-items: center;
+        font-size: 12px; font-weight: 600; border-bottom: 1px solid #333;
+        background: {_BG_TITLEBAR}; color: {_FG_DEFAULT}; gap: 6px;
+    }}
+    .ide-chat-agent {{
+        padding: 1px 6px; background: #0e639c; border-radius: 3px;
+        font-size: 10px; font-weight: 600; color: #fff;
+    }}
+    .ide-chat-messages {{
+        flex: 1; padding: 10px 12px; overflow: hidden;
+        display: flex; flex-direction: column; gap: 10px;
+    }}
+    .ide-chat-msg {{ display: flex; gap: 8px; align-items: flex-start; }}
+    .ide-chat-avatar {{
+        width: 22px; height: 22px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 12px; flex-shrink: 0;
+    }}
+    .ide-chat-avatar.user {{ background: #0e639c; }}
+    .ide-chat-avatar.assistant {{ background: #333; }}
+    .ide-chat-bubble {{
+        background: {_BG_SIDEBAR}; border-radius: 5px;
+        padding: 7px 10px; font-size: 12px; line-height: 1.5;
+        max-width: 280px; white-space: pre-wrap; word-wrap: break-word;
+    }}
+    .ide-chat-input-area {{
+        padding: 8px 10px; border-top: 1px solid #333;
+        display: flex; gap: 6px; align-items: center;
+    }}
+    .ide-chat-input {{
+        flex: 1; padding: 5px 8px; background: {_BG_INPUT};
+        border: 1px solid #555; border-radius: 3px; color: {_FG_DEFAULT};
+        font-size: 12px; font-family: {_FONT_UI};
+    }}
+    .ide-chat-send {{
+        padding: 5px 10px; background: #0e639c; color: #fff;
+        border: none; border-radius: 3px; font-size: 11px; cursor: default;
+    }}
+    .cursor {{
+        display: inline-block; width: 2px; height: 16px;
+        background: {_FG_DEFAULT}; vertical-align: text-bottom;
+        animation: blink 1s step-end infinite;
+    }}
+    @keyframes blink {{ 50% {{ opacity: 0; }} }}
+    """
+
+    # --- Activity bar -------------------------------------------------------
+    active_icon = {
+        "explorer": "files", "extensions": "extensions",
+        "chat": "chat", "editor": "files", "terminal": "files",
+    }.get(focus, "files")
+    activity_html = _activity_bar(active_icon)
+
+    # --- Sidebar ------------------------------------------------------------
+    sidebar_focus = "focused" if focus in ("explorer", "extensions") else ""
+    if sidebar_mode == "extensions" and extensions_list:
+        ext_items_html: list[str] = []
+        for ext in extensions_list:
+            btn_cls = ext_install_state if ext_install_state != "not_installed" else "install"
+            btn_label = {"install": "Install", "installing": "\u27f3 Installing\u2026", "installed": "\u2713 Installed"}.get(ext_install_state, "Install")
+            ext_items_html.append(
+                f'<div class="ide-ext-item">'
+                f'<div class="ide-ext-icon">\U0001f9e9</div>'
+                f'<div class="ide-ext-info">'
+                f'<div class="ide-ext-name">{_esc(ext.get("name", ""))}</div>'
+                f'<div class="ide-ext-pub">by {_esc(ext.get("publisher", ""))}</div>'
+                f'<span class="ide-ext-btn {btn_cls}">{btn_label}</span>'
+                f'</div></div>'
+            )
+        sidebar_html = (
+            f'<div class="ide-sidebar {sidebar_focus}">'
+            f'<input class="ide-ext-search" value="{_esc(ext_search_query)}" '
+            f'placeholder="Search Extensions" readonly>'
+            f'{"".join(ext_items_html)}'
+            f'</div>'
+        )
+    else:
+        file_items = "\n".join(
+            f'<div class="ide-sidebar-file{" active" if f == editor_filename else ""}">'
+            f'  {_esc(f)}</div>'
+            for f in files
+        )
+        sidebar_html = (
+            f'<div class="ide-sidebar {sidebar_focus}">'
+            f'<div class="ide-sidebar-header">\u25bc Explorer</div>'
+            f'{file_items}'
+            f'</div>'
+        )
+
+    # --- Editor -------------------------------------------------------------
+    highlighted = _highlight_code(editor_code, editor_language)
+    total_lines = len(highlighted)
+    lineno_html = "\n".join(str(i) for i in range(1, total_lines + 1))
+    code_lines_html: list[str] = []
+    for idx, line_html in enumerate(highlighted, start=1):
+        cls = "ide-code-line highlighted" if idx in hl_set else "ide-code-line"
+        cursor = '<span class="cursor"></span>' if idx == editor_cursor_line else ""
+        code_lines_html.append(f'<div class="{cls}">{line_html}{cursor}</div>')
+
+    editor_focus = "focused" if focus == "editor" else ""
+    tab_html = _tab_bar([editor_filename], editor_filename)
+    editor_html = (
+        f'<div class="ide-editor-area {editor_focus}">'
+        f'{tab_html}'
+        f'<div class="ide-editor-content">'
+        f'<div class="ide-line-numbers">{lineno_html}</div>'
+        f'<div class="ide-code-area">{"".join(code_lines_html)}</div>'
+        f'<div class="ide-minimap"></div>'
+        f'</div></div>'
+    )
+
+    # --- Terminal -----------------------------------------------------------
+    terminal_focus = "focused" if focus == "terminal" else ""
+    terminal_html = (
+        f'<div class="ide-terminal {terminal_focus}">'
+        f'<div class="ide-terminal-header">'
+        f'<span class="ide-terminal-tab active">Terminal</span>'
+        f'<span class="ide-terminal-tab">Problems</span>'
+        f'<span class="ide-terminal-tab">Output</span>'
+        f'</div>'
+        f'<div class="ide-terminal-body">{_esc(terminal_lines)}</div>'
+        f'</div>'
+    )
+
+    # --- Chat panel ---------------------------------------------------------
+    chat_focus = "focused" if focus == "chat" else ""
+    msgs_html_parts: list[str] = []
+    for msg in msgs:
+        role = msg.get("role", "user")
+        icon = "\U0001f464" if role == "user" else "\u2728"
+        avatar_cls = f"ide-chat-avatar {role}"
+        msgs_html_parts.append(
+            f'<div class="ide-chat-msg">'
+            f'<div class="{avatar_cls}">{icon}</div>'
+            f'<div class="ide-chat-bubble">{_esc(msg.get("content", ""))}</div>'
+            f'</div>'
+        )
+
+    agent_badge = ""
+    for msg in msgs:
+        content = msg.get("content", "").lower()
+        if "task-researcher" in content or "task researcher" in content:
+            agent_badge = '<span class="ide-chat-agent">@task-researcher</span>'
+            break
+        if "task-planner" in content or "plan" in content:
+            agent_badge = '<span class="ide-chat-agent">@task-planner</span>'
+            break
+        if "implement" in content:
+            agent_badge = '<span class="ide-chat-agent">@implementer</span>'
+            break
+
+    input_val = _esc(chat_input) if chat_input else ""
+    chat_html = (
+        f'<div class="ide-chat {chat_focus}">'
+        f'<div class="ide-chat-header">\u2728 Copilot Chat {agent_badge}</div>'
+        f'<div class="ide-chat-messages">{"".join(msgs_html_parts)}</div>'
+        f'<div class="ide-chat-input-area">'
+        f'<input class="ide-chat-input" value="{input_val}" '
+        f'placeholder="Ask Copilot\u2026" readonly>'
+        f'<button class="ide-chat-send">\u2191</button>'
+        f'</div></div>'
+    )
+
+    # --- Status bar & assembly ----------------------------------------------
+    status = _status_bar({
+        "branch": "main",
+        "language": editor_language.capitalize(),
+        "encoding": "UTF-8", "eol": "LF",
+        "indent": "Spaces: 4",
+        "position": f"Ln {editor_cursor_line or 1} Col 1",
+    })
+
+    body = (
+        f'<div class="ide-row">'
+        f'{activity_html}{sidebar_html}'
+        f'<div class="ide-center">{editor_html}{terminal_html}</div>'
+        f'{chat_html}'
+        f'</div>'
+        f'{status}'
+        f'{_on_screen_label_html(on_screen_label)}'
+    )
+    return _wrap_page(body, extra_css)
