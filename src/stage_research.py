@@ -60,13 +60,11 @@ def _create_client(config: dict) -> OpenAI:
     provider = research_cfg["provider"]
 
     if provider == "azure_openai":
-        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        from azure.identity import AzureCliCredential, get_bearer_token_provider
         from openai import AzureOpenAI
 
         token_provider = get_bearer_token_provider(
-            DefaultAzureCredential(
-                exclude_interactive_browser_credential=False,
-            ),
+            AzureCliCredential(),
             "https://cognitiveservices.azure.com/.default",
         )
         azure_cfg = research_cfg.get("azure_openai", {})

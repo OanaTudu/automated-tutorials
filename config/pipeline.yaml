@@ -4,7 +4,7 @@ pipeline:
   log_level: INFO
 
 research:
-  provider: openai
+  provider: azure_openai
   model: gpt-4.1
   max_output_tokens: 3000
   max_sources: 10
@@ -14,15 +14,15 @@ research:
     cache_dir: outputs/.research_cache
 
 script:
-  provider: openai
+  provider: azure_openai
   model: gpt-4.1
   max_output_tokens: 4096
   temperature: 0.4
   schema_enforced: true
 
 tts:
-  primary: openai_tts
-  fallback: openai_tts
+  primary: azure_openai_tts
+  fallback: azure_openai_tts
   azure:
     voice: en-US-AvaMultilingualNeural
     style: narration-professional

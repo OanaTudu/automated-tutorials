@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date
 from pathlib import Path
@@ -20,6 +21,53 @@ from .stage_script import generate_script
 from .stage_tts import synthesize_voice
 
 logger = logging.getLogger(__name__)
+
+
+def _read_stage_output(stage_result: "StageResult", stage_name: str) -> str:
+    """Read and return stage output JSON, raising a clear error if the file is missing."""
+    path = Path(stage_result.output_path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{stage_name} stage output missing: {path}. "
+            f"The stage reported success={stage_result.success} but produced no file."
+        )
+    return path.read_text(encoding="utf-8")
+
+
+_REQUIRED_CONFIG_KEYS = [
+    ("pipeline", "output_root"),
+    ("pipeline", "max_duration_seconds"),
+    ("script", "provider"),
+    ("script", "model"),
+    ("script", "max_output_tokens"),
+    ("tts", "primary"),
+    ("tts", "fallback"),
+    ("recording", "mode"),
+    ("post", "engine"),
+]
+
+
+def _validate_config(config: dict) -> None:
+    """Raise ValueError listing all missing required config keys."""
+    missing: list[str] = []
+    for section, key in _REQUIRED_CONFIG_KEYS:
+        if not isinstance(config.get(section), dict) or key not in config[section]:
+            missing.append(f"{section}.{key}")
+    if missing:
+        raise ValueError(f"Pipeline config missing required keys: {', '.join(missing)}")
+
+    # Semantic checks
+    errors: list[str] = []
+    max_dur = config.get("pipeline", {}).get("max_duration_seconds")
+    if isinstance(max_dur, (int, float)) and max_dur <= 0:
+        errors.append("pipeline.max_duration_seconds must be > 0")
+
+    max_retries = config.get("critique", {}).get("max_retries")
+    if max_retries is not None and (not isinstance(max_retries, int) or max_retries < 0):
+        errors.append("critique.max_retries must be a non-negative integer")
+
+    if errors:
+        raise ValueError(f"Pipeline config invalid: {'; '.join(errors)}")
 
 
 def _format_research(research: ResearchResult) -> str:
@@ -71,6 +119,7 @@ def make_tutorial(
     with cfg_path.open(encoding="utf-8") as f:
         config: dict = yaml.safe_load(f)
 
+    _validate_config(config)
     config["audience"] = audience
 
     # Pre-flight environment validation
@@ -89,7 +138,7 @@ def make_tutorial(
     logger.info("Stage 0: Researching '%s'", topic)
     research_result = research_topic(topic, run_dir / "00_research", config, audience=audience)
     research = ResearchResult.model_validate_json(
-        Path(research_result.output_path).read_text(encoding="utf-8"),
+        _read_stage_output(research_result, "Research"),
     )
     config["source_material"] = _format_research(research)
 
@@ -108,7 +157,7 @@ def make_tutorial(
         logger.info("Stage 1: Generating script for '%s' (attempt %d)", topic, attempt + 1)
         script_result = generate_script(topic, run_dir / "01_script", config)
         script = TutorialScript.model_validate_json(
-            Path(script_result.output_path).read_text(encoding="utf-8"),
+            _read_stage_output(script_result, "Script"),
         )
 
         # Quality gate
@@ -152,10 +201,14 @@ def make_tutorial(
         # the script's target, since TTS speed varies from the LLM's estimate.
         manifest_path = run_dir / "02_voice" / "timing_manifest.json"
         actual_target_sec = script.total_target_seconds
-        if manifest_path.exists():
-            import json as _json
-            _manifest = _json.loads(manifest_path.read_text(encoding="utf-8"))
-            actual_target_sec = _manifest.get("total_duration_ms", 0) / 1000.0
+        try:
+            if manifest_path.exists():
+                _manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest_ms = _manifest.get("total_duration_ms", 0)
+                if isinstance(manifest_ms, (int, float)) and manifest_ms > 0:
+                    actual_target_sec = manifest_ms / 1000.0
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("Could not read timing manifest, using script estimate")
 
         video_errors = validate_video(
             Path(edit_result.output_path),
@@ -174,7 +227,7 @@ def make_tutorial(
             script, research, run_dir / "06_critique", config, audience=audience,
         )
         critique_result = CritiqueResult.model_validate_json(
-            Path(critique_stage_result.output_path).read_text(encoding="utf-8"),
+            _read_stage_output(critique_stage_result, "Critique"),
         )
 
         # Check if critique passes
@@ -206,6 +259,9 @@ def make_tutorial(
             logger.warning("Critique max retries reached, proceeding with best attempt")
 
     # Publish (after critique loop)
+    if edit_result is None:
+        raise RuntimeError("Pipeline produced no video — check stage logs for errors")
+
     publish_dir = run_dir / "05_publish"
     publish_dir.mkdir(parents=True, exist_ok=True)
     final_path = publish_dir / "tutorial.mp4"

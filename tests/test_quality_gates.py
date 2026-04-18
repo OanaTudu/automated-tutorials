@@ -221,3 +221,80 @@ def test_multiple_errors_reported():
     object.__setattr__(script, "total_target_seconds", 310)
     errors = validate_script(script, max_seconds=300)
     assert len(errors) >= 2
+
+
+# ── validate_video: malformed ffprobe output ─────────────────────────────
+
+from pathlib import Path
+from unittest.mock import patch
+
+from src.quality_gates import validate_video
+
+
+def _video_config(**overrides):
+    cfg = {
+        "post": {
+            "resolution": "1920x1080",
+            "fps": 30,
+            "validation": {
+                "enabled": True,
+                "duration_tolerance_pct": 15,
+                "max_av_drift_sec": 0.5,
+                "min_file_size_kb": 1,
+            },
+        },
+    }
+    cfg["post"].update(overrides)
+    return cfg
+
+
+def _probe_data(*, resolution="1920x1080", r_frame_rate="30/1"):
+    w, h = resolution.split("x")
+    return {
+        "streams": [
+            {
+                "codec_type": "video",
+                "codec_name": "h264",
+                "width": int(w),
+                "height": int(h),
+                "r_frame_rate": r_frame_rate,
+                "duration": "60.0",
+            },
+            {"codec_type": "audio", "codec_name": "aac", "duration": "60.0"},
+        ],
+        "format": {"duration": "60.0"},
+    }
+
+
+@patch("src.quality_gates.probe_video")
+def test_validate_video_malformed_resolution_config(mock_probe, tmp_path):
+    """Config has a bad resolution string like '1920' (no 'x')."""
+    video = tmp_path / "test.mp4"
+    video.write_bytes(b"\x00" * 2048)
+    mock_probe.return_value = _probe_data()
+    cfg = _video_config(resolution="bad-resolution")
+    errors = validate_video(video, 60.0, cfg)
+    assert any("Invalid resolution" in e for e in errors)
+
+
+@patch("src.quality_gates.probe_video")
+def test_validate_video_fps_no_slash(mock_probe, tmp_path):
+    """ffprobe returns FPS as '30' instead of '30/1'."""
+    video = tmp_path / "test.mp4"
+    video.write_bytes(b"\x00" * 2048)
+    mock_probe.return_value = _probe_data(r_frame_rate="30")
+    cfg = _video_config()
+    errors = validate_video(video, 60.0, cfg)
+    # Should NOT crash — should either parse successfully or report a parse error
+    assert not any("Cannot parse" in e for e in errors)  # "30" is parseable
+
+
+@patch("src.quality_gates.probe_video")
+def test_validate_video_fps_garbage_value(mock_probe, tmp_path):
+    """ffprobe returns unparseable FPS string."""
+    video = tmp_path / "test.mp4"
+    video.write_bytes(b"\x00" * 2048)
+    mock_probe.return_value = _probe_data(r_frame_rate="N/A")
+    cfg = _video_config()
+    errors = validate_video(video, 60.0, cfg)
+    assert any("Cannot parse FPS" in e for e in errors)

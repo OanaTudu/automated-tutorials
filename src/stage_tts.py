@@ -56,6 +56,8 @@ def _dispatch(
         return _synthesize_azure(script, output_dir, tts_cfg["azure"])
     if provider in ("openai_tts", "openai"):
         return _synthesize_openai(script, output_dir, tts_cfg["openai"])
+    if provider in ("azure_openai_tts", "azure_openai"):
+        return _synthesize_azure_openai(script, output_dir, tts_cfg["openai"])
     msg = f"Unknown TTS provider: {provider}"
     raise ValueError(msg)
 
@@ -85,11 +87,9 @@ def _synthesize_azure(
             region=region,
         )
     else:
-        from azure.identity import DefaultAzureCredential
+        from azure.identity import AzureCliCredential
 
-        credential = DefaultAzureCredential(
-            exclude_interactive_browser_credential=False,
-        )
+        credential = AzureCliCredential()
         token = credential.get_token("https://cognitiveservices.azure.com/.default")
         speech_config = speechsdk.SpeechConfig(
             auth_token=token.token,
@@ -157,17 +157,36 @@ def _synthesize_azure(
     return output_path, manifest
 
 
+def _synthesize_azure_openai(
+    script: TutorialScript, output_dir: Path, cfg: dict,
+) -> tuple[Path, TimingManifest]:
+    """Synthesize narration via Azure OpenAI TTS using DefaultAzureCredential."""
+    import os
+
+    from azure.identity import AzureCliCredential, get_bearer_token_provider
+    from openai import AzureOpenAI
+
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+    if not endpoint:
+        raise RuntimeError("Azure OpenAI TTS requires AZURE_OPENAI_ENDPOINT env var")
+
+    token_provider = get_bearer_token_provider(
+        AzureCliCredential(),
+        "https://cognitiveservices.azure.com/.default",
+    )
+    client = AzureOpenAI(
+        azure_endpoint=endpoint,
+        azure_ad_token_provider=token_provider,
+        api_version="2025-04-01-preview",
+    )
+    return _synthesize_with_client(client, script, output_dir, cfg)
+
+
 def _synthesize_openai(
     script: TutorialScript, output_dir: Path, cfg: dict,
 ) -> tuple[Path, TimingManifest]:
-    """Synthesize narration via OpenAI TTS as fallback.
-
-    Attempts per-segment synthesis with ffmpeg concatenation for better
-    pacing control.  Falls back to single-blob synthesis if ffmpeg is
-    unavailable or concatenation fails.
-    """
+    """Synthesize narration via OpenAI TTS as fallback."""
     import os
-    import subprocess
 
     if not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError(
@@ -178,6 +197,23 @@ def _synthesize_openai(
     from openai import OpenAI
 
     client = OpenAI()
+    return _synthesize_with_client(client, script, output_dir, cfg)
+
+
+def _synthesize_with_client(
+    client: "OpenAI",
+    script: TutorialScript,
+    output_dir: Path,
+    cfg: dict,
+) -> tuple[Path, TimingManifest]:
+    """Shared TTS logic for both OpenAI and Azure OpenAI clients.
+
+    Attempts per-segment synthesis with ffmpeg concatenation for better
+    pacing control.  Falls back to single-blob synthesis if ffmpeg is
+    unavailable or concatenation fails.
+    """
+    import subprocess
+
     output_path = output_dir / "voice.wav"
 
     # Define segments: (id, text, target_seconds)
@@ -192,6 +228,8 @@ def _synthesize_openai(
     ]
 
     segment_paths: list[Path] = []
+    gap_path: Path | None = None
+    concat_list: Path | None = None
     manifest = TimingManifest(total_duration_ms=0, segments=[])
     try:
         # Synthesize each segment individually
@@ -309,5 +347,9 @@ def _synthesize_openai(
     finally:
         for seg_path in segment_paths:
             seg_path.unlink(missing_ok=True)
+        if gap_path is not None:
+            gap_path.unlink(missing_ok=True)
+        if concat_list is not None:
+            concat_list.unlink(missing_ok=True)
 
     return output_path, manifest
