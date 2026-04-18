@@ -359,3 +359,66 @@ def test_make_tutorial_skips_captions_when_no_engine(
     make_tutorial("python basics", config_path=cfg_path)
 
     mock_captions.assert_not_called()
+
+
+# ── Guard: edit_result None when max_retries is negative ─────────────────
+
+
+@patch("src.make_tutorial.run_preflight", return_value=PreflightResult())
+def test_make_tutorial_raises_when_no_video_produced(
+    _mock_preflight,
+    tmp_path,
+    pipeline_config,
+):
+    from src.make_tutorial import make_tutorial
+
+    # Negative max_retries is now caught by config validation
+    pipeline_config["critique"] = {"enabled": True, "max_retries": -1}
+    pipeline_config["pipeline"]["output_root"] = str(tmp_path / "outputs")
+    cfg_path = _write_config(tmp_path, pipeline_config)
+
+    with pytest.raises(ValueError, match="non-negative integer"):
+        make_tutorial("python basics", config_path=cfg_path)
+
+
+# ── Guard: missing stage output file ─────────────────────────────────────
+
+
+@patch("src.make_tutorial.run_preflight", return_value=PreflightResult())
+@patch("src.make_tutorial.research_topic")
+def test_make_tutorial_raises_on_missing_stage_output(
+    mock_research,
+    _mock_preflight,
+    tmp_path,
+    pipeline_config,
+):
+    from src.make_tutorial import make_tutorial
+
+    pipeline_config["pipeline"]["output_root"] = str(tmp_path / "outputs")
+    cfg_path = _write_config(tmp_path, pipeline_config)
+
+    # Research returns a StageResult pointing to a non-existent file
+    mock_research.return_value = StageResult(
+        stage="research", success=True, output_path=str(tmp_path / "ghost.json")
+    )
+
+    with pytest.raises(FileNotFoundError, match="Research stage output missing"):
+        make_tutorial("python basics", config_path=cfg_path)
+
+
+# ── Guard: missing required config keys ──────────────────────────────────
+
+
+@patch("src.make_tutorial.run_preflight", return_value=PreflightResult())
+def test_make_tutorial_raises_on_bad_config(
+    _mock_preflight,
+    tmp_path,
+):
+    from src.make_tutorial import make_tutorial
+
+    # Write a config missing required keys
+    bad_config = {"pipeline": {"output_root": str(tmp_path)}}
+    cfg_path = _write_config(tmp_path, bad_config)
+
+    with pytest.raises(ValueError, match="missing required keys"):
+        make_tutorial("python basics", config_path=cfg_path)

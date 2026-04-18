@@ -144,11 +144,17 @@ def validate_video(
     # Resolution check
     if video_stream:
         expected_res = config.get("post", {}).get("resolution", "1920x1080")
-        w, h = expected_res.split("x")
-        actual_w = video_stream.get("width", 0)
-        actual_h = video_stream.get("height", 0)
-        if actual_w != int(w) or actual_h != int(h):
-            errors.append(f"Resolution {actual_w}x{actual_h} != expected {expected_res}")
+        try:
+            w, h = expected_res.split("x")
+            expected_w, expected_h = int(w), int(h)
+        except (ValueError, AttributeError):
+            errors.append(f"Invalid resolution config format: {expected_res!r}")
+            expected_w = expected_h = None
+        if expected_w is not None:
+            actual_w = video_stream.get("width", 0)
+            actual_h = video_stream.get("height", 0)
+            if actual_w != expected_w or actual_h != expected_h:
+                errors.append(f"Resolution {actual_w}x{actual_h} != expected {expected_res}")
     else:
         errors.append("No video stream found")
 
@@ -156,9 +162,15 @@ def validate_video(
     if video_stream:
         expected_fps = config.get("post", {}).get("fps", 30)
         r_frame_rate = video_stream.get("r_frame_rate", "0/1")
-        num, den = r_frame_rate.split("/")
-        actual_fps = int(num) / max(int(den), 1)
-        if abs(actual_fps - expected_fps) > 1:
+        try:
+            parts = r_frame_rate.split("/")
+            num = int(parts[0])
+            den = int(parts[1]) if len(parts) > 1 else 1
+            actual_fps = num / max(den, 1)
+        except (ValueError, IndexError, AttributeError, ZeroDivisionError):
+            errors.append(f"Cannot parse FPS from ffprobe: {r_frame_rate!r}")
+            actual_fps = None
+        if actual_fps is not None and abs(actual_fps - expected_fps) > 1:
             errors.append(f"FPS {actual_fps:.1f} != expected {expected_fps}")
 
     # Audio stream present

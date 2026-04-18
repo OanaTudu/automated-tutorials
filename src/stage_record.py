@@ -59,9 +59,12 @@ def record_demo(
     # Load timing manifest from voice stage output when available
     timing_manifest: TimingManifest | None = None
     manifest_path = output_dir.parent / "02_voice" / "timing_manifest.json"
-    if manifest_path.exists():
-        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        timing_manifest = TimingManifest.model_validate(manifest_data)
+    try:
+        if manifest_path.exists():
+            manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            timing_manifest = TimingManifest.model_validate(manifest_data)
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("Could not parse timing manifest (%s), proceeding without it", exc)
 
     skip_normalize = False
 
@@ -169,9 +172,12 @@ def _record_slides_fallback(
     """Try to generate a slide-based video; fall back to black placeholder if that fails too."""
     timing_manifest: TimingManifest | None = None
     manifest_path = output_dir.parent / "02_voice" / "timing_manifest.json"
-    if manifest_path.exists():
-        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        timing_manifest = TimingManifest.model_validate(manifest_data)
+    try:
+        if manifest_path.exists():
+            manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            timing_manifest = TimingManifest.model_validate(manifest_data)
+    except (json.JSONDecodeError, ValueError) as exc:
+        logger.warning("Could not parse timing manifest for slides (%s)", exc)
 
     if timing_manifest is None:
         logger.warning("No timing manifest — cannot generate slides, using placeholder")

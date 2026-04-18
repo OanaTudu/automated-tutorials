@@ -22,13 +22,11 @@ def _create_client(config: dict) -> OpenAI:
     """Create the appropriate OpenAI client based on provider config."""
     provider = config["script"].get("provider", "openai")
     if provider == "azure_openai":
-        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        from azure.identity import AzureCliCredential, get_bearer_token_provider
         from openai import AzureOpenAI
 
         token_provider = get_bearer_token_provider(
-            DefaultAzureCredential(
-                exclude_interactive_browser_credential=False,
-            ),
+            AzureCliCredential(),
             "https://cognitiveservices.azure.com/.default",
         )
         azure_cfg = config["script"].get("azure_openai", {})
