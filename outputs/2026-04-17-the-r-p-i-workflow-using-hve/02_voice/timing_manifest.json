@@ -1,0 +1,53 @@
+{
+  "total_duration_ms": 281050,
+  "segments": [
+    {
+      "id": "hook",
+      "start_ms": 0,
+      "end_ms": 20650,
+      "text": "Curious how AI coding agents can speed up your data science workflow in VS Code? Today, I'll show you step-by-step how to use the HVE extension's RPI workflow—Research, Planning, and Implementation—on the Titanic dataset, even if you’ve never used AI agents before."
+    },
+    {
+      "id": "section_0",
+      "start_ms": 22150,
+      "end_ms": 65850,
+      "text": "Let’s start by installing the HVE extension, which powers the RPI workflow. Open VS Code and look for the Extensions icon—four squares—in the left sidebar. Click it, and in the search bar at the top, type 'HVE Core'. Choose the ‘HVE Core’ extension from the list and click the blue Install button. Once it’s finished, you’ll see a confirmation on the right, and new agents become available in your Copilot Chat panel. This process is quick and doesn’t require any extra setup. As a data scientist, getting these tools installed lets you work smarter—with research, planning, and code generation all in one place."
+    },
+    {
+      "id": "section_1",
+      "start_ms": 67350,
+      "end_ms": 112150,
+      "text": "Next, let’s explore the Titanic data using @task-researcher. Click the Copilot Chat panel—it looks like a speech bubble in the sidebar. In the agent picker at the top, select @task-researcher. Type your request: ‘Explore titanic.csv, summarize columns, and give key insights for data science.’ Hit Enter. The agent researches your dataset and creates markdown notes showing data types, missing values, and basic stats. Check the explorer on the left—you’ll see a new folder, '.copilot-tracking', with a research summary in markdown. This step gives you quick, organized insights—much like how you would sketch out an initial EDA, but faster and automated."
+    },
+    {
+      "id": "section_2",
+      "start_ms": 113650,
+      "end_ms": 156700,
+      "text": "With research in hand, let’s plan our analysis using @task-planner. In Copilot Chat, switch the agent picker to @task-planner. Type: ‘Plan a data science workflow to load titanic.csv, explore it, and build a simple model predicting survival.’ Send your prompt. The agent creates a step-by-step plan in markdown—typically outlining data loading, EDA, preprocessing, model training, and evaluation. Now, check the explorer—under '.copilot-tracking,’ there’s a new planning file. Open and review these steps; you’ll see a practical workflow similar to what you’d draft for a basic ML task, saved and structured automatically for you."
+    },
+    {
+      "id": "section_3",
+      "start_ms": 158200,
+      "end_ms": 211650,
+      "text": "Finally, let’s turn your plan into working code using @task-implementer. Switch to this agent in Copilot Chat. Prompt: ‘Write Python code to load titanic.csv, explore the data, and build a simple logistic regression predicting Survived.’ The agent generates a Python script—usually named something like explore_titanic.py—covering data loading, basic EDA, and the model. Check the explorer for this new file, open it, and review the generated code. Let’s run it: Open the terminal panel at the bottom of VS Code, type 'python explore_titanic.py' and hit Enter. The script outputs basic stats and a model score—no copy-paste needed. This step shows how HVE can save you time by automating code creation for real data workflows."
+    },
+    {
+      "id": "section_4",
+      "start_ms": 213150,
+      "end_ms": 243350,
+      "text": "If you want the shortcut version, HVE offers the @RPI-agent that handles research, planning, and implementation in one go. In Copilot Chat, select @RPI-agent, prompt: ‘Build a Python workflow for Titanic survival prediction.’ You’ll get research, plan, and code together—best for quick tasks. But for learning the process, stepping through the three agents gives you more control and transparency."
+    },
+    {
+      "id": "recap",
+      "start_ms": 244850,
+      "end_ms": 267100,
+      "text": "We just walked through the RPI workflow using HVE in VS Code—from installing the extension, to researching, planning, and implementing a Titanic data science project with AI coding agents. You’ve seen each step, including the shortcut @RPI-agent for fast results."
+    },
+    {
+      "id": "cta",
+      "start_ms": 268600,
+      "end_ms": 281050,
+      "text": "Ready to try this RPI workflow yourself? Install HVE Core in VS Code, open your Titanic dataset, and let the AI agents accelerate your next project. Happy coding!"
+    }
+  ]
+}

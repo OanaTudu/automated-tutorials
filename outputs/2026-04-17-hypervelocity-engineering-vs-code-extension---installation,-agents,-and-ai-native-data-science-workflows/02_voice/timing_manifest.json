@@ -1,0 +1,53 @@
+{
+  "total_duration_ms": 208950,
+  "segments": [
+    {
+      "id": "hook",
+      "start_ms": 0,
+      "end_ms": 20650,
+      "text": "Ever wondered how to supercharge your data science workflow with AI agents directly in VS Code? Today, I'll walk you through installing the HyperVelocity Engineering extension and using its AI-native agents to load, explore, and model the Titanic dataset — without writing any code yourself."
+    },
+    {
+      "id": "section_0",
+      "start_ms": 22150,
+      "end_ms": 47100,
+      "text": "Let's start by installing the HyperVelocity Engineering, or HVE, extension in VS Code. Click the Extensions icon on the left sidebar — it looks like four squares. In the search bar that pops up, type 'HyperVelocity Engineering'. When you see it in the list, click the blue Install button. That’s it — no need for any API keys or credentials. This extension is ready to go out of the box."
+    },
+    {
+      "id": "section_1",
+      "start_ms": 48600,
+      "end_ms": 75200,
+      "text": "Now, let’s explore the agents HVE adds to VS Code. Click the Copilot Chat icon — it looks like a speech bubble in the sidebar. A chat panel will open. In the agent picker at the top, you’ll notice several agent options, including @task-researcher, @task-planner, and @task-implementer. These are your AI partners for end-to-end data science tasks. We’ll use them step by step to work with the Titanic data."
+    },
+    {
+      "id": "section_2",
+      "start_ms": 76700,
+      "end_ms": 104450,
+      "text": "First, let’s research the Titanic dataset. In the Copilot Chat panel, select @task-researcher from the agent picker. Type, 'Explore titanic.csv and summarize the data'. Hit Enter. The agent will create a research markdown file. To see the output, look in the explorer — you’ll find a new '.copilot-tracking/research' folder with a markdown file inside. Open it to review the automated analysis."
+    },
+    {
+      "id": "section_3",
+      "start_ms": 105950,
+      "end_ms": 135450,
+      "text": "Next, let's plan the actual analysis. In the Copilot Chat panel, switch to @task-planner. Type, 'Plan a Python script to load, explore, and predict survival on titanic.csv'. The planner agent will create a plan file in the '.copilot-tracking/plans' folder. Check the explorer for this new plan. Open it to read through the detailed steps the agent has devised for our data science workflow."
+    },
+    {
+      "id": "section_4",
+      "start_ms": 136950,
+      "end_ms": 178050,
+      "text": "It's time to bring it all together! Select @task-implementer in the Copilot Chat agent picker. Prompt it: 'Implement the plan for titanic.csv analysis in Python.' The agent generates the complete script — no copy-pasting required. Check the '.copilot-tracking/details' folder for the implementation details file. Open the file to see the ready-to-run Python code. Double-click the script to open it in the editor, then click the 'Run Python File' button at the top right of the editor. The terminal will display the output — likely some basic EDA and survival predictions using the Titanic data. This all happens automatically thanks to HVE's agent workflow."
+    },
+    {
+      "id": "recap",
+      "start_ms": 179550,
+      "end_ms": 196250,
+      "text": "We installed HVE Core, explored its agents, and walked step by step through researching, planning, and implementing a data science workflow on the Titanic dataset — all seamlessly inside VS Code using AI agents."
+    },
+    {
+      "id": "cta",
+      "start_ms": 197750,
+      "end_ms": 208950,
+      "text": "Try out the HyperVelocity Engineering extension in your own projects, and experiment with the other agents like @RPI-agent to speed up more complex workflows. Happy experimenting!"
+    }
+  ]
+}

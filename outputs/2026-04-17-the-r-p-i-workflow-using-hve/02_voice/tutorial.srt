@@ -1,0 +1,172 @@
+1
+00:00:00,000 --> 00:00:04,620
+Curious how AI coding agents can speed up your data science workflow in VS Code?
+
+2
+00:00:05,400 --> 00:00:12,400
+Today, I'll show you step by step how to use the HVE Extension's RPI workflow, research,
+
+3
+00:00:12,839 --> 00:00:19,039
+planning, and implementation on the Titanic data set, even if you've never used AI agents before.
+
+4
+00:00:23,359 --> 00:00:28,339
+Let's start by installing the HVE extension, which powers the RPI workflow.
+
+5
+00:00:28,339 --> 00:00:34,380
+Open VS Code and look for the extensions icon, four squares in the left sidebar.
+
+6
+00:00:34,960 --> 00:00:42,320
+Click it and in the search bar at the top, type HVE Core. Choose the HVE Core extension from the list
+
+7
+00:00:42,320 --> 00:00:48,119
+and click the blue install button. Once it's finished, you'll see a confirmation on the right
+
+8
+00:00:48,119 --> 00:00:51,719
+and new agents become available in your co-pilot chat panel.
+
+9
+00:00:52,179 --> 00:00:55,799
+This process is quick and doesn't require any extra setup.
+
+10
+00:00:57,280 --> 00:01:02,619
+As a data scientist, getting these tools installed lets you work smarter, with research,
+
+11
+00:01:03,020 --> 00:01:12,659
+planning, and code generation all in one place. Next, let's explore the Titanic data using
+
+12
+00:01:12,659 --> 00:01:18,319
+At-Task Researcher. Click the co-pilot chat panel, it looks like a speech bubble in the sidebar.
+
+13
+00:01:18,980 --> 00:01:23,920
+In the Agent Picker at the top, select At-Task Researcher. Type your request,
+
+14
+00:01:23,920 --> 00:01:29,719
+explore Titanic.csv, summarize columns, and give key insights for data science.
+
+15
+00:01:30,260 --> 00:01:35,920
+Hit enter. The agent researches your data set and creates markdown notes showing data types,
+
+16
+00:01:36,180 --> 00:01:41,739
+missing values, and basic stats. Check the explorer on the left. You'll see a new folder,
+
+17
+00:01:42,120 --> 00:01:46,000
+dot dot dot, co-pilot tracking, with a research summary in markdown.
+
+18
+00:01:46,459 --> 00:01:51,739
+This step gives you quick, organized insights, much like how you would sketch out an initial
+
+19
+00:01:51,739 --> 00:02:01,390
+EDA, but faster and automated. With research in hand, let's plan our analysis using At-Task Planner.
+
+20
+00:02:01,890 --> 00:02:08,210
+In co-pilot chat, switch the Agent Picker to At-Task Planner. Type, plan a data science workflow to
+
+21
+00:02:08,210 --> 00:02:13,330
+load Titanic.csv, explore it, and build a simple model predicting survival.
+
+22
+00:02:13,930 --> 00:02:18,110
+Send your prompt. The agent creates a step-by-step plan in markdown,
+
+23
+00:02:18,110 --> 00:02:24,129
+typically outlining data loading, EDA, pre-processing, model training, and evaluation.
+
+24
+00:02:24,930 --> 00:02:29,729
+Now check the explorer. Under dot co-pilot tracking, there's a new planning file.
+
+25
+00:02:30,090 --> 00:02:36,009
+Open and review these steps. You'll see a practical workflow similar to what you draft for a basic
+
+26
+00:02:36,009 --> 00:02:44,939
+ML task, saved and structured automatically for you. Finally, let's turn your plan into
+
+27
+00:02:44,939 --> 00:02:50,000
+working code using At-Task Implementer. Switch to this agent in co-pilot chat.
+
+28
+00:02:50,560 --> 00:02:56,979
+Prompt, write Python code to load Titanic.csv, explore the data, and build a simple logistic
+
+29
+00:02:56,979 --> 00:03:03,280
+regression predicting survived. The agent generates a Python script, usually named something like
+
+30
+00:03:03,280 --> 00:03:10,819
+explore Titanic.py, covering data loading, basic EDA, and the model. Check the explorer for this
+
+31
+00:03:10,819 --> 00:03:16,800
+new file, open it, and review the generated code. Let's run it. Open the terminal panel
+
+32
+00:03:16,800 --> 00:03:25,219
+at the bottom of VS Code. Type Python explore Titanic.py and hit Enter. The script outputs basic
+
+33
+00:03:25,219 --> 00:03:32,060
+stats and a model score. No copy-paste needed. This step shows how HVE can save you time
+
+34
+00:03:32,060 --> 00:03:40,939
+by automating code creation for real data workflows. If you want the shortcut version,
+
+35
+00:03:41,340 --> 00:03:48,379
+HVE offers the at-rpi agent that handles research, planning, and implementation in one go.
+
+36
+00:03:49,039 --> 00:03:56,340
+In co-pilot chat, select at-rpi agent, prompt, build a Python workflow for Titanic survival
+
+37
+00:03:56,340 --> 00:04:03,960
+prediction. You'll get research, plan, and code together. Best for quick tasks. But for
+
+38
+00:04:03,960 --> 00:04:09,000
+learning the process, stepping through the three agents gives you more control and transparency.
+
+39
+00:04:12,099 --> 00:04:18,839
+We just walked through the RPI workflow using HVE in VS Code, from installing the extension
+
+40
+00:04:18,839 --> 00:04:26,639
+to researching, planning, and implementing a Titanic data science project with AI coding agents.
+
+41
+00:04:27,560 --> 00:04:38,779
+You've seen each step, including the shortcut at RPI agent for fast results. Ready to try this RPI
+
+42
+00:04:38,779 --> 00:04:46,560
+workflow yourself? Install HVE core in VS Code, open your Titanic data set, and let the AI agents
+
+43
+00:04:46,560 --> 00:04:49,459
+accelerate your next project. Happy coding!
+
