@@ -1,0 +1,23 @@
+{
+  "topic": "HyperVelocity Engineering VS Code Extension: Installation, Agents, and AI-Native Data Science Workflows",
+  "sources": [
+    "https://hve.run/docs/basics/overview/",
+    "https://context7.com/microsoft/hve-core",
+    "https://techcommunity.microsoft.com/blog/azuredevcommunityblog/build-ai-agents-end-to-end-in-vs-code/4418117",
+    "https://code.visualstudio.com/blogs/2026/03/13/how-VS-Code-Builds-with-AI",
+    "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/vs-code-agents-workflow-pro-code?pivots=python&tabs=windows-powershell"
+  ],
+  "key_findings": [
+    "HyperVelocity Engineering (HVE) is a paradigm that leverages AI collaboration to enhance development velocity while maintaining or improving code quality.",
+    "The HVE VS Code extension can be installed directly from the Extensions sidebar by searching for 'HyperVelocity Engineering' and clicking 'Install'. No API keys or credentials are required for setup.",
+    "HVE provides specialized agents, including the RPI Agent, which orchestrates tasks through a Research → Plan → Implement → Review → Discover workflow, and the Task Researcher, which generates comprehensive research documents.",
+    "The RPI Agent operates autonomously within VS Code, utilizing subagents as needed and iterating until success criteria are met.",
+    "HVE integrates seamlessly into the VS Code environment, enhancing the developer experience by automating routine tasks and allowing focus on high-value decisions.",
+    "The extension supports AI-native data science workflows by enabling rapid prototyping, real-time collaboration, and iterative development processes.",
+    "HVE's structured approach to prompt engineering and AI agent orchestration is designed to be enterprise-ready, facilitating scalable and efficient development practices."
+  ],
+  "code_examples": [
+    "```markdown\n# In VS Code Copilot Chat, select \"RPI Agent\" from the agent picker\n# Example: Request a feature implementation\nUser: Add Docker SHA validation to our CI pipeline\n\n# RPI Agent will:\n# Phase 1: Research - Assess difficulty, investigate codebase, create research document\n# Phase 2: Plan - Create implementation plan with phases and success criteria\n# Phase 3: Implement - Execute plan using subagents, validate each phase\n# Phase 4: Review - Verify all requests fulfilled, run validation commands\n# Phase 5: Discover - Present 3-5 follow-up work suggestions\n\n# Tracking artifacts created in .copilot-tracking/:\n# - .copilot-tracking/research/{YYYY-MM-DD}/{topic}-research.md\n# - .copilot-tracking/plans/{YYYY-MM-DD}/{task}-plan.instructions.md\n# - .copilot-tracking/details/{YYYY-MM-DD}/{task}-details.md\n# - .copilot-tracking/changes/{YYYY-MM-DD}/{task}-changes.md\n# - .copilot-tracking/reviews/{YYYY-MM-DD}/{task}-review.md\n```"
+  ],
+  "raw_notes": "HyperVelocity Engineering (HVE) is an AI-driven development paradigm that emphasizes collaboration between multidisciplinary teams and AI agents to accelerate development processes without compromising quality. The HVE VS Code extension facilitates this by providing specialized agents and workflows directly within the Visual Studio Code environment. Installation is straightforward, requiring no additional credentials or API keys. Key agents include the RPI Agent, which autonomously orchestrates tasks through a structured workflow, and the Task Researcher, which generates in-depth research documents. These agents operate seamlessly within VS Code, integrating with existing tools and panels to enhance the developer experience. HVE's approach is particularly beneficial for AI-native data science workflows, enabling rapid prototyping, iterative development, and real-time collaboration. The framework's enterprise-ready design ensures scalability and efficiency, making it suitable for a wide range of development projects."
+}

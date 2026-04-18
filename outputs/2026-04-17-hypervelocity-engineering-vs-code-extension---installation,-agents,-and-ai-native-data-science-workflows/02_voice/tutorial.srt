@@ -1,0 +1,144 @@
+1
+00:00:00,000 --> 00:00:06,459
+Ever wondered how to supercharge your data science workflow with AI agents directly in VS Code?
+
+2
+00:00:07,120 --> 00:00:11,439
+Today, I'll walk you through installing the Hyper Velocity Engineering Extension
+
+3
+00:00:11,439 --> 00:00:17,640
+and using its AI native agents to load, explore, and model the Titanic data set
+
+4
+00:00:17,640 --> 00:00:26,519
+without writing any code yourself. Let's start by installing the Hyper Velocity Engineering,
+
+5
+00:00:26,519 --> 00:00:35,280
+or HVE extension in VS Code. Click the extensions icon on the left sidebar. It looks like four squares.
+
+6
+00:00:35,880 --> 00:00:41,780
+In the search bar that pops up, type Hyper Velocity Engineering. When you see it in the list,
+
+7
+00:00:42,100 --> 00:00:47,539
+click the blue install button. That's it. No need for any API keys or credentials.
+
+8
+00:00:50,799 --> 00:00:57,340
+Now, let's explore the agents HVE adds to VS Code. Click the co-pilot chat icon.
+
+9
+00:00:57,340 --> 00:01:01,179
+It looks like a speech bubble in the sidebar. A chat panel will open.
+
+10
+00:01:01,700 --> 00:01:05,079
+In the agent picker at the top, you'll notice several agent options,
+
+11
+00:01:05,519 --> 00:01:11,920
+including at-task researcher, at-task planner, and at-task implementer. These are your AI partners
+
+12
+00:01:11,920 --> 00:01:17,280
+for end-to-end data science tasks. We'll use them step by step to work with the Titanic data.
+
+13
+00:01:20,379 --> 00:01:25,420
+First, let's research the Titanic data set. In the co-pilot chat panel,
+
+14
+00:01:25,420 --> 00:01:32,980
+select at-task researcher from the agent picker. Type explore-titanic.csv and summarize the data.
+
+15
+00:01:33,459 --> 00:01:39,280
+Hit enter. The agent will create a research markdown file. To see the output, look in the explorer.
+
+16
+00:01:39,900 --> 00:01:45,180
+You'll find a new .co-pilot tracking slash research folder with a markdown file inside.
+
+17
+00:01:45,640 --> 00:01:54,090
+Open it to review the automated analysis. Next, let's plan the actual analysis.
+
+18
+00:01:54,650 --> 00:01:58,250
+In the co-pilot chat panel, switch to at-task planner.
+
+19
+00:01:58,989 --> 00:02:05,870
+Type plan a Python script to load, explore, and predict survival on Titanic.csv.
+
+20
+00:02:06,530 --> 00:02:11,870
+The planner agent will create a plan file in the .co-pilot tracking plans folder.
+
+21
+00:02:12,490 --> 00:02:17,210
+Check the explorer for this new plan. Open it to read through the detailed steps
+
+22
+00:02:17,210 --> 00:02:20,169
+the agent has devised for our data science workflow.
+
+23
+00:02:23,110 --> 00:02:29,229
+It's time to bring it all together. Select at-task implementer in the co-pilot chat agent picker.
+
+24
+00:02:29,590 --> 00:02:33,750
+Prompt it. Implement the plan for titanic.csv analysis in Python.
+
+25
+00:02:34,650 --> 00:02:38,189
+The agent generates the complete script. No copy pasting required.
+
+26
+00:02:38,930 --> 00:02:43,289
+Check the .co-pilot tracking details folder for the implementation details file.
+
+27
+00:02:43,889 --> 00:02:46,669
+Open the file to see the ready to run Python code.
+
+28
+00:02:47,229 --> 00:02:49,509
+Double-click the script to open it in the editor.
+
+29
+00:02:49,979 --> 00:02:53,090
+Then click the run Python file button at the top right of the editor.
+
+30
+00:02:53,550 --> 00:02:59,349
+The terminal will display the output, likely some basic EDA and survival predictions using the Titanic
+
+31
+00:02:59,349 --> 00:03:04,030
+data. This all happens automatically thanks to HVE's agent workflow.
+
+32
+00:03:06,919 --> 00:03:13,180
+We installed HVE core, explored its agents, and walked step by step through researching,
+
+33
+00:03:13,500 --> 00:03:18,180
+planning, and implementing a data science workflow on the Titanic dataset.
+
+34
+00:03:18,659 --> 00:03:22,939
+All seamlessly inside VS code using AI agents.
+
+35
+00:03:26,219 --> 00:03:30,419
+Try out the hyper-velocity engineering extension in your own projects
+
+36
+00:03:30,879 --> 00:03:37,159
+and experiment with the other agents like at-rpi agent to speed up more complex workflows.
+
