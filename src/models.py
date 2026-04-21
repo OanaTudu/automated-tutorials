@@ -47,6 +47,30 @@ class TutorialScript(BaseModel):
     cta: str
 
 
+class SectionPlan(BaseModel):
+    """Planner-emitted contract describing a single section before execution."""
+
+    id: str
+    title: str
+    target_seconds: int = Field(ge=5, le=120)
+    coverage_points: list[str] = Field(
+        default_factory=list,
+        description="Research findings this section must cover",
+    )
+
+
+class TutorialOutline(BaseModel):
+    """Planner output: the full section plan for a tutorial plus top-level copy."""
+
+    topic: str
+    audience: str
+    total_target_seconds: int = Field(le=300)
+    sections: list[SectionPlan]
+    hook: str = ""
+    recap: str = ""
+    cta: str = ""
+
+
 class ResearchResult(BaseModel):
     """Output from the research stage — gathered source material for script generation."""
 
@@ -75,6 +99,14 @@ class CritiqueScores(BaseModel):
     )
 
 
+class SectionEdit(BaseModel):
+    """A targeted edit request for a specific section of the script."""
+
+    section_index: int = Field(ge=0)
+    issue: str
+    suggested_change: str
+
+
 class CritiqueResult(BaseModel):
     """Self-critique output evaluating the generated tutorial."""
 
@@ -83,6 +115,7 @@ class CritiqueResult(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     improvements: list[str] = Field(default_factory=list)
     summary: str = ""
+    section_edits: list[SectionEdit] = Field(default_factory=list)
 
 
 class StageResult(BaseModel):

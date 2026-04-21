@@ -422,3 +422,114 @@ def test_make_tutorial_raises_on_bad_config(
 
     with pytest.raises(ValueError, match="missing required keys"):
         make_tutorial("python basics", config_path=cfg_path)
+
+
+# ── _write_run_report ────────────────────────────────────────────────────
+
+
+def test_write_run_report_happy_path(tmp_path):
+    from src.make_tutorial import _write_run_report
+    from src.models import SectionEdit
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    stage_results = [
+        StageResult(
+            stage="research",
+            success=True,
+            output_path=str(tmp_path / "research.json"),
+            metadata={"duration_sec": 1.23, "path": "parallel"},
+        ),
+        StageResult(
+            stage="script",
+            success=True,
+            output_path=str(tmp_path / "script.json"),
+            metadata={"duration_sec": 4.56},
+        ),
+    ]
+    critique = CritiqueResult(
+        scores=CritiqueScores(
+            accuracy=8.0, completeness=8.0, pacing=7.5,
+            audience_fit=8.0, teaching_effectiveness=8.0,
+        ),
+        overall_grade=8.0,
+        strengths=["Clear hook"],
+        improvements=["More examples"],
+        summary="Solid",
+        section_edits=[SectionEdit(section_index=0, issue="i", suggested_change="c")],
+    )
+    warnings = ["warn one", "warn two"]
+    final_video = tmp_path / "tutorial.mp4"
+
+    report = _write_run_report(
+        run_dir,
+        topic="python basics",
+        audience="data scientists",
+        stage_results=stage_results,
+        final_video=final_video,
+        warnings=warnings,
+        critique=critique,
+    )
+
+    assert report.exists()
+    text = report.read_text(encoding="utf-8")
+    assert "python basics" in text
+    assert "## Stages" in text
+    assert "✅" in text
+    assert "## Warnings" in text
+    assert "warn one" in text
+    assert "warn two" in text
+    assert "path=parallel" in text
+    assert str(final_video) in text
+
+
+def test_write_run_report_tolerates_missing_keys(tmp_path):
+    from src.make_tutorial import _write_run_report
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    report = _write_run_report(
+        run_dir,
+        topic="git rebase",
+        audience="devs",
+        stage_results=[],
+        final_video=None,
+        warnings=[],
+        critique=None,
+    )
+
+    assert report.exists()
+    text = report.read_text(encoding="utf-8")
+    assert "(not produced)" in text
+    assert "(none)" in text
+
+
+def test_write_run_report_never_raises(tmp_path, monkeypatch):
+    from src.make_tutorial import _write_run_report
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+
+    def _boom(self, *args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "write_text", _boom)
+
+    # Must not raise
+    report = _write_run_report(
+        run_dir,
+        topic="t",
+        audience="a",
+        stage_results=[],
+        final_video=None,
+        warnings=[],
+        critique=None,
+    )
+
+    # The helper still returns the intended path even if write failed.
+    assert report.name == "run_report.md"
+
+
+

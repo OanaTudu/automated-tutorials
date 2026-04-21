@@ -126,3 +126,33 @@ def test_default_critique_has_expected_scores():
     assert critique.strengths == []
     assert critique.improvements == []
     assert "test reason" in critique.summary
+    assert critique.section_edits == []
+
+
+# ── Backwards-compat for CritiqueResult (section_edits default) ──────────
+
+
+def test_critique_result_parses_without_section_edits():
+    """JSON payloads without `section_edits` parse successfully with an empty default."""
+    payload = _mock_critique().model_dump()
+    payload.pop("section_edits", None)
+    import json as _json
+
+    critique = CritiqueResult.model_validate_json(_json.dumps(payload))
+    assert critique.section_edits == []
+
+
+def test_critique_result_parses_with_section_edits():
+    """JSON payloads with populated `section_edits` round-trip through the model."""
+    import json as _json
+
+    payload = _mock_critique().model_dump()
+    payload["section_edits"] = [
+        {"section_index": 0, "issue": "no hook", "suggested_change": "open with a question"},
+        {"section_index": 2, "issue": "dense", "suggested_change": "split into two beats"},
+    ]
+    critique = CritiqueResult.model_validate_json(_json.dumps(payload))
+    assert len(critique.section_edits) == 2
+    assert critique.section_edits[0].section_index == 0
+    assert critique.section_edits[0].issue == "no hook"
+    assert critique.section_edits[1].suggested_change == "split into two beats"

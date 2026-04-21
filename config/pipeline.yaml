@@ -8,6 +8,7 @@ research:
   model: gpt-4.1
   max_output_tokens: 3000
   max_sources: 10
+  parallel_subagents: true
   cache:
     enabled: true
     ttl_days: 7
@@ -19,6 +20,8 @@ script:
   max_output_tokens: 4096
   temperature: 0.4
   schema_enforced: true
+  # planner_model: gpt-4.1       # defaults to `model` when omitted
+  # executor_model: gpt-4.1      # defaults to `model` when omitted
 
 tts:
   primary: azure_openai_tts
