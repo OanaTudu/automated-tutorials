@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -37,6 +38,61 @@ common pitfalls, and relevant datasets (list of strings)
 
 Return ONLY valid JSON — no markdown fences, no commentary outside the object.
 """
+
+
+_SUBAGENT_HEADER = """\
+You are a senior technical researcher preparing material for a tutorial video.
+Your audience is {audience}.
+
+Domain context — AI-native development:
+When the topic involves acronyms, extension names, or tool names that could be
+ambiguous, always prefer the AI-native software development interpretation.
+For example, "HVE" means "HyperVelocity Engineering" (a VS Code extension for
+AI-native dev), not "High Variance Estimator" from statistics.  Prioritise
+VS Code extensions, GitHub Copilot ecosystem tools, AI coding agents, and
+modern developer-experience tooling when interpreting topics.
+"""
+
+_SUBAGENT_SCHEMA_FOOTER = """\
+Return a JSON object with these fields:
+- "topic": the research topic (string)
+- "sources": up to {max_sources} URLs or reference titles (list of strings)
+- "key_findings": bullet-point facts (list of strings)
+- "code_examples": runnable code snippets (list of strings)
+- "raw_notes": free-form research notes (string)
+
+Return ONLY valid JSON — no markdown fences, no commentary outside the object.
+"""
+
+_SUBAGENT_PROMPTS: dict[str, str] = {
+    "concepts_and_prereqs": (
+        _SUBAGENT_HEADER
+        + "\nFocus exclusively on core concepts and prerequisites for this subtask.\n"
+        "Populate `key_findings` richly with definitions, mental models, and prerequisites; "
+        "keep `code_examples` minimal (only tiny setup snippets if essential). "
+        "All fields below must still be present so downstream merging is uniform.\n\n"
+        + _SUBAGENT_SCHEMA_FOOTER
+    ),
+    "code_examples": (
+        _SUBAGENT_HEADER
+        + "\nFocus exclusively on runnable code examples for this subtask.\n"
+        "Populate `code_examples` richly with complete, self-contained, runnable snippets "
+        "that illustrate the topic; keep `key_findings` minimal (only brief captions tying "
+        "each snippet to its purpose). All fields below must still be present so downstream "
+        "merging is uniform.\n\n"
+        + _SUBAGENT_SCHEMA_FOOTER
+    ),
+    "common_pitfalls": (
+        _SUBAGENT_HEADER
+        + "\nFocus exclusively on common pitfalls, gotchas, errors, and anti-patterns "
+        "for this subtask.\n"
+        "Populate `key_findings` richly with pitfalls, typical mistakes, error signatures, "
+        "and anti-patterns to avoid; keep `code_examples` minimal (only counter-examples "
+        "showing the pitfall, if needed). All fields below must still be present so "
+        "downstream merging is uniform.\n\n"
+        + _SUBAGENT_SCHEMA_FOOTER
+    ),
+}
 
 
 def _get_research_config(config: dict) -> dict:
@@ -139,7 +195,9 @@ def _research_azure(
     return _parse_research(raw_text, topic)
 
 
-def _cache_key(topic: str, audience: str, research_cfg: dict) -> str:
+def _cache_key(
+    topic: str, audience: str, research_cfg: dict, parallel: bool = False,
+) -> str:
     """Compute a deterministic SHA-256 cache key from normalised inputs."""
     blob = json.dumps(
         {
@@ -147,6 +205,7 @@ def _cache_key(topic: str, audience: str, research_cfg: dict) -> str:
             "audience": audience.strip().lower(),
             "model": research_cfg.get("model", ""),
             "max_sources": research_cfg.get("max_sources", 5),
+            "parallel": parallel,
         },
         sort_keys=True,
     )
@@ -176,6 +235,94 @@ def _write_cache(cache_dir: Path, key: str, result: ResearchResult) -> None:
     )
 
 
+def _merge_subagent_results(
+    topic: str, named_results: list[tuple[str, ResearchResult]],
+) -> ResearchResult:
+    """Merge per-subagent ResearchResult objects with case-insensitive de-dup."""
+
+    def _dedup_preserve_case(items: list[str], *, strip: bool = False) -> list[str]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for item in items:
+            normalised = item.strip() if strip else item
+            key = normalised.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(normalised if strip else item)
+        return out
+
+    merged_sources: list[str] = []
+    merged_findings: list[str] = []
+    merged_code: list[str] = []
+    raw_chunks: list[str] = []
+
+    for name, res in named_results:
+        merged_sources.extend(res.sources)
+        merged_findings.extend(res.key_findings)
+        merged_code.extend(res.code_examples)
+        raw_chunks.append(f"## {name}\n{res.raw_notes}\n")
+
+    return ResearchResult(
+        topic=topic,
+        sources=_dedup_preserve_case(merged_sources),
+        key_findings=_dedup_preserve_case(merged_findings),
+        code_examples=_dedup_preserve_case(merged_code, strip=True),
+        raw_notes="".join(raw_chunks),
+    )
+
+
+def _run_subagents_parallel(
+    topic: str, audience: str, config: dict,
+) -> ResearchResult:
+    """Dispatch three focused research subagents in parallel and merge results."""
+    research_cfg = _get_research_config(config)
+    max_sources = research_cfg.get("max_sources", 5)
+    per_agent_sources = max(2, max_sources // 3)
+
+    subagent_cfg = dict(research_cfg)
+    subagent_cfg["max_sources"] = per_agent_sources
+
+    provider = research_cfg["provider"]
+    client = _create_client(config)
+
+    def _dispatch(name: str, template: str) -> tuple[str, ResearchResult]:
+        system_prompt = template.format(
+            audience=audience, max_sources=per_agent_sources,
+        )
+        if provider == "azure_openai":
+            res = _research_azure(client, subagent_cfg, system_prompt, topic)
+        else:
+            res = _research_openai(client, subagent_cfg, system_prompt, topic)
+        return name, res
+
+    named_results: list[tuple[str, ResearchResult]] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {
+            pool.submit(_dispatch, name, template): name
+            for name, template in _SUBAGENT_PROMPTS.items()
+        }
+        try:
+            for future in concurrent.futures.as_completed(futures):
+                name = futures[future]
+                try:
+                    named_results.append(future.result())
+                except Exception as exc:
+                    for pending in futures:
+                        pending.cancel()
+                    raise RuntimeError(
+                        f"Subagent {name} failed: {exc}",
+                    ) from exc
+        except RuntimeError:
+            raise
+
+    # Preserve a stable merge order (matches _SUBAGENT_PROMPTS insertion order).
+    order = {name: idx for idx, name in enumerate(_SUBAGENT_PROMPTS)}
+    named_results.sort(key=lambda pair: order[pair[0]])
+
+    return _merge_subagent_results(topic, named_results)
+
+
 def research_topic(
     topic: str,
     output_dir: Path,
@@ -190,6 +337,8 @@ def research_topic(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    parallel = config.get("research", {}).get("parallel_subagents", True)
+
     # ── Cache lookup ─────────────────────────────────────────────────────
     cache_cfg = config.get("research", {}).get("cache", {})
     cache_enabled = cache_cfg.get("enabled", False)
@@ -199,7 +348,7 @@ def research_topic(
     if cache_enabled:
         cache_dir = Path(cache_cfg.get("cache_dir", "outputs/.research_cache"))
         _rcfg = _get_research_config(config)
-        cache_key_hex = _cache_key(topic, audience, _rcfg)
+        cache_key_hex = _cache_key(topic, audience, _rcfg, parallel=parallel)
 
         if not config.get("force_research", False):
             cached = _load_cache(cache_dir, cache_key_hex, cache_cfg.get("ttl_days", 7))
@@ -221,15 +370,20 @@ def research_topic(
         max_sources=research_cfg["max_sources"],
     )
 
-    logger.info("Starting research for topic: %s (provider=%s)", topic, research_cfg["provider"])
+    logger.info(
+        "Starting research for topic: %s (provider=%s, parallel=%s)",
+        topic, research_cfg["provider"], parallel,
+    )
 
     try:
-        client = _create_client(config)
-
-        if research_cfg["provider"] == "azure_openai":
-            result = _research_azure(client, research_cfg, system_prompt, topic)
+        if parallel:
+            result = _run_subagents_parallel(topic, audience, config)
         else:
-            result = _research_openai(client, research_cfg, system_prompt, topic)
+            client = _create_client(config)
+            if research_cfg["provider"] == "azure_openai":
+                result = _research_azure(client, research_cfg, system_prompt, topic)
+            else:
+                result = _research_openai(client, research_cfg, system_prompt, topic)
 
         logger.info(
             "Research complete — %d sources, %d findings, %d code examples",

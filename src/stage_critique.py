@@ -29,6 +29,7 @@ def _build_critique_prompt(
     script: TutorialScript,
     research: ResearchResult,
     audience: str,
+    min_overall_grade: float = 7.0,
 ) -> str:
     """Build the user prompt that asks the LLM to critique the tutorial."""
     sections_text = "\n".join(
@@ -65,6 +66,12 @@ Evaluate the following tutorial script against the research material below.
 Compute **overall_grade** as the weighted mean:
   accuracy×0.25 + completeness×0.20 + pacing×0.15 + audience_fit×0.20 + teaching_effectiveness×0.20
 
+## Targeted section edits
+If the overall_grade falls below {min_overall_grade}, return a `section_edits` array
+listing the problematic sections. Each edit must have `section_index` (0-based), a
+concise `issue`, and a specific `suggested_change`. Leave `section_edits` empty when
+the script passes.
+
 List concrete **strengths** and actionable **improvements**.
 Return ONLY the JSON object matching the schema."""
 
@@ -83,6 +90,7 @@ def _default_critique(reason: str) -> CritiqueResult:
         strengths=[],
         improvements=[],
         summary=f"Critique could not be completed: {reason}",
+        section_edits=[],
     )
 
 
@@ -101,7 +109,10 @@ def critique_tutorial(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    user_prompt = _build_critique_prompt(script, research, audience)
+    min_overall_grade = config.get("critique", {}).get("min_overall_grade", 7.0)
+    user_prompt = _build_critique_prompt(
+        script, research, audience, min_overall_grade=min_overall_grade,
+    )
     input_messages: list[dict[str, str]] = [
         {"role": "user", "content": user_prompt},
     ]

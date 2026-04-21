@@ -1,0 +1,74 @@
+Write ONE section of a data-science tutorial script. Another model has already
+planned the full outline; your job is to fill in this single section with
+narration, key points, and a shot list. Do NOT emit hook/recap/cta — those are
+handled elsewhere.
+
+Audience: {{ audience }}
+
+Full tutorial outline (for context — do NOT re-emit other sections):
+Topic: {{ outline.topic }}
+Total target duration: {{ outline.total_target_seconds }} seconds
+All planned sections:
+{% for s in outline.sections %}- {{ s.id }} | {{ s.title }} | {{ s.target_seconds }}s
+{% endfor %}
+
+Section to write NOW:
+- id: {{ section_plan.id }}
+- title: {{ section_plan.title }}
+- target_seconds: {{ section_plan.target_seconds }}
+- coverage_points the narration + key_points MUST cover:
+{% for cp in section_plan.coverage_points %}  - {{ cp }}
+{% endfor %}
+
+Pre-researched source material (use this as the primary factual basis — do not
+invent claims beyond what is provided here):
+{{ source_material }}
+
+{% if revision_context %}
+REVISION FEEDBACK (previous attempt missed coverage — address each item):
+{{ revision_context }}
+{% endif %}
+
+Requirements:
+1. Return a JSON object matching the Section schema exactly. Fields:
+   `id`, `title`, `target_seconds`, `narration`, `key_points`, `shots`.
+2. `id` MUST equal "{{ section_plan.id }}".
+3. `title` MUST equal "{{ section_plan.title }}".
+4. `target_seconds` MUST equal {{ section_plan.target_seconds }}.
+5. `key_points` MUST cover every entry in `coverage_points` above — at least
+   one key point or a clear narration sentence per coverage item.
+6. `narration` MUST be ≥ 20 words and written in a natural screen-share style —
+   as if the presenter is talking the viewer through what they are doing on
+   screen in real time (e.g., "Let me click on the Extensions icon on the left
+   sidebar…"). Reference the {{ audience }} audience naturally.
+7. `shots` MUST contain at least one "code_walkthrough" shot showing code
+   being written, highlighted, or executed. Visual descriptions must reference
+   the actual VS Code panel visible on screen — for example "VS Code Extensions
+   sidebar with 'HVE Core' in search bar", "VS Code Copilot Chat panel with
+   @task-researcher agent selected", "VS Code editor with explore_titanic.py
+   open", "terminal running python script".
+8. Every shot must have `start_sec` and `end_sec` with `end_sec > start_sec`
+   and each shot must be ≥ 2 seconds long. Shot timings should stay within
+   this section's `target_seconds` budget.
+9. Avoid generic or placeholder visuals like "slide with bullet points". Every
+   visual should depict something the viewer would actually see during a live
+   demo.
+
+Hard rules this section must respect:
+1. ALL code examples must be Python. No JavaScript or TypeScript.
+2. Use the Titanic dataset (titanic.csv) as the running example. Keep it
+   simple: load, explore, one basic prediction.
+3. No API keys or credentials are needed — the extension installs and works
+   immediately. Do NOT mention API keys, tokens, or authentication setup.
+4. Cover FEWER topics but explain thoroughly with exact click-by-click
+   instructions. The viewer has never used AI coding agents before.
+5. If this section covers one of the three agents, walk through it in order
+   (@task-researcher → @task-planner → @task-implementer) and show: selecting
+   the agent in the chat picker, typing a prompt, reviewing its output.
+6. Do NOT instruct the viewer to copy-paste code. The agents generate code
+   automatically — the viewer reviews and runs it.
+7. You may mention @RPI-agent briefly only if this is a final-shortcut
+   section; otherwise focus on the 3 individual agents.
+8. Narration density target is 125-145 words per minute. For this section
+   ({{ section_plan.target_seconds }}s) aim for roughly
+   {{ (section_plan.target_seconds * 135 / 60) | round | int }} words of narration.

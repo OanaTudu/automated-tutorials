@@ -1,0 +1,57 @@
+Plan a data-science tutorial OUTLINE for the following topic. You will emit ONLY
+an outline — not the full narration. A separate executor will fill in each
+section afterwards.
+
+Topic: {{ topic }}
+Audience: {{ audience }}
+Target duration: {{ target_seconds }} seconds
+
+Pre-researched source material (the executor will receive this same material;
+plan coverage from it — do not invent claims beyond what is provided here):
+{{ source_material }}
+
+Requirements:
+1. Return a JSON object matching the TutorialOutline schema exactly.
+2. Produce 3-5 SectionPlan entries whose `target_seconds` values sum to
+   approximately {{ target_seconds }} (within ±25%).
+3. Each SectionPlan must have:
+   - `id`: short stable slug (e.g., "s1", "s2", ...).
+   - `title`: concise section heading.
+   - `target_seconds`: integer between 5 and 120.
+   - `coverage_points`: list of bullet strings drawn VERBATIM (or tightly
+     paraphrased) from the research findings provided above. Every important
+     finding must land in exactly one section's coverage_points.
+4. Also emit top-level `hook`, `recap`, and `cta` strings:
+   - `hook`: ≥ 10 words, written in screen-share narration style.
+   - `recap`: ≥ 10 words, summarising what was covered.
+   - `cta`: a short call-to-action.
+5. The tutorial is a VS Code extension walkthrough. Structure the sections to
+   follow this user journey when applicable:
+   Open VS Code → Install extension → Open Chat → @task-researcher →
+   @task-planner → @task-implementer.
+
+Hard rules the outline must respect (the executor will enforce them per section):
+1. ALL code is Python only. No JavaScript or TypeScript.
+2. Use the Titanic dataset (titanic.csv) as the running example. Keep it
+   simple: load, explore, one basic prediction.
+3. Visuals will reference the actual VS Code panel on screen — plan sections
+   around visible UI (Extensions sidebar, Copilot Chat panel, editor, terminal).
+4. Narration will be screen-share style, as if the presenter is talking the
+   viewer through what they are doing on screen in real time.
+5. No API keys or credentials — the extension installs and works immediately.
+   Do NOT plan any section about authentication or tokens.
+6. Cover FEWER topics but thoroughly. The viewer has never used AI coding
+   agents before — plan for click-by-click explanation.
+7. Walk through the three agents SEPARATELY and in order:
+   @task-researcher → @task-planner → @task-implementer.
+   Each agent gets its own section OR a clearly demarcated coverage point.
+8. Do NOT plan any copy-paste-code instructions. The agents generate code
+   automatically — the viewer reviews and runs it.
+9. You may mention @RPI-agent briefly at the end as a shortcut, but the main
+   outline MUST demonstrate the 3 individual agents step by step.
+10. Every section will need at least one "code_walkthrough" shot, so plan
+    sections that have something concrete to show in code.
+11. Avoid generic or placeholder visuals — plan sections around things the
+    viewer would actually see during a live demo.
+12. Narration density will be 125-145 words per minute — plan `target_seconds`
+    accordingly so the executor has room to explain thoroughly.
